@@ -108,6 +108,50 @@ When overlaying a `frameworks/base` resource:
   change there means installing the new version recompiles the applications in
   `/data`, and the release notes have to say so.
 
+## Porting to another model
+
+The maintainer has only a PW3, so every other model depends on someone who
+has one. One repository holds several models: kernels group by version, and
+one kernel version shares one patch series; what belongs to a model alone is a
+boot profile (`boot/profiles/<model>-<firmware>.json`), a device directory
+(`device/amazon/<model>/`) and a kernel model fragment
+(`config/models/<model>.config`). How far each model is from the PW3, and what
+a port involves, are in `docs/design/porting-to-other-models.en.md`. Open a
+"Port" issue to keep track of the work; releasing from your own fork first is
+fine. The four hard rules above hold for every model.
+
+To bring a model back into this repository, four more:
+
+1. **A model's pull request adds only what belongs to that model**: its boot
+   profile, device directory and kernel model fragment, plus the lines that
+   register the model with the build scripts (such as the model list in
+   `tools/build-kernel.sh`, which the tests require to match `config/models/`).
+   A change to how shared code behaves (`boot/`, `installer/`,
+   `device/amazon/pw3/`, the shared patch series, the rest of the build
+   scripts) is a pull request of its own that says which models need it, how
+   it is limited to them, and why the others are unaffected. Before merging,
+   the maintainer compares the PW3 build outputs from before and after the
+   change on the build machine; where they differ, the pull request says why
+   the change is right on the PW3 as well, and it has been checked on one.
+2. **Code that exists only for an emulator or a test is kept apart the way this
+   repository already does it.** Kernel patches go in `patches/test-kernel/`,
+   not into the release series; a test path in the boot programs is a separate
+   build-time configuration. A release build contains none of it, and no
+   command-line parameter can turn it on in a release.
+3. **Device results come from what this repository's build produces.** A
+   hand-repacked image does not count. Attach what the device itself recorded
+   -- the folder for that start under `android/logs/` on the Kindle drive (it
+   holds no serial number, MAC address or network name; see
+   `docs/install.en.md`) -- and what the screen showed. Something that only ran
+   in an emulator says "emulator", not "device".
+4. **A merged model has a maintainer**: someone who has that machine at hand,
+   reviews changes to that model's files, and before every release installs and
+   starts the release on it and reports back. Support is stated in two tiers:
+   the PW3 is "verified on the maintainer's device"; any other model is
+   "community-maintained, verified on a device by <name>". A model with no
+   device report before a release gets no installer in that release; a model
+   with none for two releases in a row is marked "currently unmaintained".
+
 ## Commits
 
 - Message: first line `scope: what changed`, lower case, no full stop; the body

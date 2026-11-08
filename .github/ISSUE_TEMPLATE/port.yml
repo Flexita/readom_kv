@@ -8,6 +8,8 @@ body:
       value: |
         给正在动手的人：在这里记进度、提问题，想帮忙的人也能找到你。开始前先读[移植文档](https://github.com/hbyxabc/readom/blob/main/docs/design/porting-to-other-models.md)。在自己的 fork 里发布也完全可以；做稳定了，欢迎提 Pull Request 合回来。
         For people doing the work: keep your progress and questions here, so others who want to help can find you. Read the [porting notes](https://github.com/hbyxabc/readom/blob/main/docs/design/porting-to-other-models.en.md) first. Releasing from your own fork is fine; once it is stable, a pull request to bring it back is welcome.
+        要合回这个仓库，先读 [CONTRIBUTING](https://github.com/hbyxabc/readom/blob/main/CONTRIBUTING.md) 里「移植到其他机型」一节：一个机型的 Pull Request 只加它自己的东西，真机结果要来自这个仓库的构建流程，合进来的机型要有一位手里有那台机器的维护者。
+        Before bringing it back, read "Porting to another model" in [CONTRIBUTING](https://github.com/hbyxabc/readom/blob/main/CONTRIBUTING.en.md): a model's pull request adds only what belongs to that model, device results come from this repository's build, and a merged model needs a maintainer who has the device.
   - type: input
     id: model
     attributes:

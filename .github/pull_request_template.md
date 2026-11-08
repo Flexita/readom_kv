@@ -23,3 +23,4 @@
 - [ ] 补丁系列只追加，已有的补丁没有改 / the patch series was only appended to
 - [ ] framework 资源只改值、不加新名字 / framework resources: values changed, no new names
 - [ ] 没有设备专属数据：序列号、MAC、Wi‑Fi 名称、波形、校准 / no device-specific data: serial numbers, MACs, Wi-Fi names, waveforms, calibration
+- [ ] 新机型：只加了这个机型自己的东西（见 CONTRIBUTING「移植到其他机型」）/ a new model: only what belongs to that model was added (CONTRIBUTING, "Porting to another model")

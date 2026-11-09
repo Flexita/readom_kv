@@ -48,3 +48,13 @@ jobs:
       # every SPDX line in every file the way the reference tool does.
       - name: REUSE compliance
         run: pipx run --spec 'reuse[charset-normalizer]==6.2.0' reuse lint
+
+      # What a pull request may change (CONTRIBUTING.md, "移植到其他机型"): no
+      # binary file but an image, and a model's pull request only that model's
+      # files. For a pull request the checkout is the merge GitHub made, so
+      # HEAD^1 is the branch it merges into and the diff is what merging would
+      # change. It runs when a step above failed too: the answers are
+      # independent, and whoever sent the pull request should see both at once.
+      - name: What the pull request changes
+        if: github.event_name == 'pull_request' && !cancelled()
+        run: python3 tools/check-pr-scope.py HEAD^1 HEAD

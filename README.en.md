@@ -34,7 +34,7 @@
 
 <br>
 
-<p align="center">The demo, the download and an illustrated install guide are on the website: <b><a href="https://readom.app">readom.app</a></b><br>For now it runs on the Kindle Paperwhite 3 (7th generation) only, and the Kindle's own system stays.</p>
+<p align="center">The demo, the download and an illustrated install guide are on the website: <b><a href="https://readom.app">readom.app</a></b><br>For now it runs on the Kindle Paperwhite 3 (7th generation) only, and the Kindle's own system stays. <a href="#other-models">Other models</a> depend on the community.</p>
 
 <br>
 
@@ -158,6 +158,28 @@ The website has an illustrated install guide, and a way to have an AI walk you t
 - **Uninstall**<br>
   delete the `android` folder and `documents/Readom.sh` from the Kindle drive. The Kindle's system and your books are untouched.
 
+## Other models
+
+Readom has been verified on the Kindle Paperwhite 3 only. The maintainer has only that one, so every other model depends on people who have the device. How far each is from the PW3, going by the kernel source Amazon publishes:
+
+| Model | Where it stands |
+|---|---|
+| Voyage, Oasis 1 | The same kernel version as the PW3, so the closest: both kernels already build, and the Oasis 1 still lacks a Wi-Fi driver |
+| PW4, Oasis 2, Oasis 3, Kindle 10 | One newer kernel (4.1.15) shared by all four. The kernel patches and the handover have to be redone on it, and doing that once serves all four, on better hardware. Nobody has taken it on yet |
+| Kindle 8 | Another kernel (3.10.53), and a 600×800 screen the interface has to be laid out again for |
+| PW5, PW6, Kindle 11 (2022), Colorsoft, Scribe | MediaTek chips: the display layer has to be rewritten against their driver, which is a new build rather than a port, and not something for the near term |
+| PW1, PW2, Kindle 7 | 256 MB of memory or a kernel too old for this Android; not planned |
+
+A few things to say up front:
+
+- **No model has a date.** The number of requests decides which model we look at first, but without a device and someone willing to test on it for the long run, none of them moves.
+
+- **A merged model has a maintainer.** That person has the device, and installs and starts every release on it before it goes out; a release nobody has verified on a model ships no installer for it.
+
+- **Support comes in two tiers.** The PW3 is verified on a device by the project's maintainer; any other model says "community-maintained" and who verifies it on a device.
+
+If you have one of these and are willing to test on it for the long run, open a ["Port" issue](https://github.com/hbyxabc/readom/issues/new?template=port.yml); to bring the work back into this repository, read "Porting to another model" in [CONTRIBUTING](CONTRIBUTING.en.md) first. If you only want to say a model matters to you, a comment on [#3](https://github.com/hbyxabc/readom/issues/3) is enough.
+
 ## Building and porting
 
 ### How it is built
@@ -193,14 +215,7 @@ The build environment and steps are in [CONTRIBUTING.en.md](CONTRIBUTING.en.md),
 
 Readom runs on the PW3 only for now, but most of it does not depend on the model: about two in three kernel patches never touch hardware code, most of the AOSP changes carry over as they are, and the boot handover takes one configuration per model and firmware. Moving to another Kindle means redoing the kernel patches that touch hardware, one boot configuration and one device directory, then measuring everything again on the real device.
 
-| Model | How far from the PW3 |
-|---|---|
-| Voyage | Closest: Amazon builds it with the same kernel configuration as the PW3, and the kernel already builds |
-| Oasis 1 | The kernel already builds; the Wi-Fi driver is missing |
-| Kindle 8, PW4 and others | A different kernel, but the display side can be reused |
-| PW5, Kindle 11th generation, Scribe and other MediaTek models | Display, Wi-Fi and power all have to be rewritten |
-
-What exactly it takes is in [porting to other models](docs/design/porting-to-other-models.en.md).
+How far each model is from the PW3 is under [Other models](#other-models) above; what exactly it takes is in [porting to other models](docs/design/porting-to-other-models.en.md); the rules for bringing a model back into this repository are in "Porting to another model" in [CONTRIBUTING](CONTRIBUTING.en.md).
 
 ## Licence
 

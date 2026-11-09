@@ -152,6 +152,71 @@ To bring a model back into this repository, four more:
    device report before a release gets no installer in that release; a model
    with none for two releases in a row is marked "currently unmaintained".
 
+### Before a model is merged
+
+A model's pull request, and the pull request that changes shared code for it,
+each go through the four steps below in order; one that fails a step is not
+merged.
+
+1. **Automatic checks** (on every pull request, `.github/workflows/tests.yml`):
+   the host tests pass (`tools/run-tests.py`); every file carries its licence
+   (`reuse lint`); no file holds private data such as a MAC address, a serial
+   number or a key (`tools/check-private-data.py`); no binary file comes in
+   except an image (png, jpg, webp, pgm, and its content has to be one) --
+   kernel modules, firmware, waveforms, update packages and jailbreaks all
+   count; and a pull request that touches a model's own files is about that
+   one model and touches only its files and its line in
+   `tools/build-kernel.sh` (the last two are `tools/check-pr-scope.py`). These
+   catch mistakes, not someone working around them on purpose: for a pull
+   request that changes a check, GitHub runs the changed copy. An Amazon file
+   or a jailbreak script in text form is not something they can recognise
+   either; the review in step four reads for those.
+2. **The PW3 is unaffected**: the maintainer builds the PW3 from before and
+   after the change on the build machine and compares. The system image's
+   ext4 container differs on every build, so what is compared is the content
+   of each file in it (both builds with the same `PW3_BUILD_DATETIME`); the
+   entry `Readom.sh` carries the system image's hash, so it is rebuilt with
+   the same system image before it is compared; the kernel (`zImage`,
+   modules, `.config`) and the other outputs are compared byte for byte.
+   Where anything differs, the pull request says why it is right on the PW3
+   as well, and it has been checked on one.
+3. **The device evidence matches**: besides the record rule 3 above asks for,
+   attach the commit that was built, the entry directory's `build-result.json`
+   (it records the SHA-256 of the `android/system.img` it installs) and
+   `launcher/build-result.json` (it records the SHA-256 of `Readom.sh`), and
+   the SHA-256 of those two files on the Kindle drive, computed on a computer
+   (`shasum -a 256 android/system.img documents/Readom.sh`). When they agree,
+   the drive holds what this build produced, not a repacked image; this finds
+   a wrong image or a repacked file mixed in. It does not find a deliberate
+   forgery, and it does not prove which commit the receipts came from: the
+   receipts and the record are in the contributor's hands, and the start's
+   record cannot yet be traced to one particular build.
+4. **A written review, and the maintainer decides**: the maintainer writes a
+   review of each such pull request that lists every problem with its file and
+   line. Once those are dealt with, the maintainer decides whether to merge.
+
+For now some PW3 values are still written into shared code (the path of the
+boot profile, the hashes of the stock boot files, the kernel version string
+and more), so even the Voyage or the Oasis 1, on the same kernel as the PW3,
+cannot be ported the first time without a pull request that changes shared
+code, which goes on its own under rule 1. Models on a different kernel
+version (the Kindle 8; the PW4, Oasis 2, Oasis 3 and Kindle 10) also need
+changes to the handover, the storage layout and the display driver's
+interface, and those are designed together with the first person to port
+a model of that group.
+
+The `pw3` in names is the name of this platform (i.MX6SL, the 3.0.35 kernel),
+not only of one model: `gralloc.pw3`, `ro.hardware=pw3`, `init.pw3*.rc`,
+`sys.pw3.*` and the like are used as they are by the other models, not
+renamed. Renaming them would change what the PW3 build produces.
+
+Once merged, the model's support tier and the person who verifies it on a
+device are stated under "Other models" in the README; a model that is
+currently unmaintained is marked there too, and the release notes follow it.
+The repository uses no CODEOWNERS: GitHub accepts only people with write
+access as code owners. When a model's files change, the maintainer asks that
+model's maintainer to look, in the model's "Port" issue.
+
 ## Commits
 
 - Message: first line `scope: what changed`, lower case, no full stop; the body
@@ -160,8 +225,10 @@ To bring a model back into this repository, four more:
 - One commit does one thing; split changes that cross subjects.
 - A pull request follows the template: what changed, why, and how far it was
   verified. Every pull request runs the host tests on GitHub
-  (`.github/workflows/tests.yml`, on Linux, with `--zstd-archive`), and one
-  that does not pass is not merged.
+  (`.github/workflows/tests.yml`, on Linux, with `--zstd-archive`), and a
+  check of what it changes -- no binary files but images, and a model's pull
+  request nowhere else (`tools/check-pr-scope.py`); one that does not pass is
+  not merged.
 - Enable the hook once per clone:
 
 ```bash

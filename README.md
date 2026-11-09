@@ -32,7 +32,7 @@
 
 <br>
 
-<p align="center">演示、下载和图文安装教程都在官网：<b><a href="https://readom.app">readom.app</a></b><br>暂时只支持 Kindle Paperwhite 3（第 7 代），同时保留 Kindle 原厂系统。</p>
+<p align="center">演示、下载和图文安装教程都在官网：<b><a href="https://readom.app">readom.app</a></b><br>暂时只支持 Kindle Paperwhite 3（第 7 代），同时保留 Kindle 原厂系统。<a href="#其他机型">其他机型</a>要靠社区一起做。</p>
 
 <br>
 
@@ -154,6 +154,28 @@ Readom 是为 Kindle 定制的 Android 系统。它把 Android 8.1（AOSP）适�
 - **卸载**<br>
   删掉 Kindle 盘上的 `android` 文件夹和 `documents/Readom.sh`。原厂系统和你的书都不受影响。
 
+## 其他机型
+
+Readom 现在只在 Kindle Paperwhite 3 上验证过。维护者手里只有这一台，别的机型要靠手里有那台机器的人一起做。按亚马逊公开的内核源码，各机型离 PW3 有多远：
+
+| 机型 | 现在的情况 |
+|---|---|
+| Voyage、Oasis 1 | 和 PW3 是同一个内核版本，离得最近：两台的内核都已经能编出来，Oasis 1 还差 Wi‑Fi 驱动 |
+| PW4、Oasis 2、Oasis 3、Kindle 10 | 四台共用一个更新的内核（4.1.15）。内核补丁和交接要在它上面重新做一遍，做一次四台都能用上，硬件也更好。还没有人认领 |
+| Kindle 8 | 另一个内核（3.10.53），屏幕是 600×800，界面要重新排 |
+| PW5、PW6、Kindle 11（2022 青春版）、Colorsoft、Scribe | 联发科芯片，显示这一层要对着它的驱动重写，不是移植而是重做，短期内做不了 |
+| PW1、PW2、Kindle 7 | 内存只有 256 MB 或内核太老，装不下这套 Android，不在计划里 |
+
+先说清楚的几件事：
+
+- **不承诺哪个机型什么时候能用。** 请求多少决定先看哪一台，但没有真机、没有愿意长期测的人，哪一台都推进不了。
+
+- **合进来的机型要有一位维护者。** 这位维护者手里有那台机器，每一版发布前在真机上走一遍安装和启动；哪一版没人验，那一版就不发这个机型的安装包。
+
+- **支持分两级。** PW3 由项目维护者在真机上验证；其他机型写"社区维护"，并写明由谁在真机上验证。
+
+手里有其中一台、愿意长期在上面测的，欢迎开一个[「移植」Issue](https://github.com/hbyxabc/readom/issues/new?template=port.yml)；要合回这个仓库，先读 [CONTRIBUTING](CONTRIBUTING.md) 的「移植到其他机型」。只想表示需要某个机型的，在 [#3](https://github.com/hbyxabc/readom/issues/3) 留言就好。
+
 ## 构建与移植
 
 ### 技术架构
@@ -189,14 +211,7 @@ Readom 不刷机，整套系统由下面几块拼起来：
 
 Readom 现在只跑在 PW3 上，但大部分代码和机型无关：内核补丁里约三分之二不碰硬件代码，AOSP 一侧的改动大多能直接沿用，启动交接按「机型 + 固件」各写一份配置。换一台 Kindle，要重做的是内核里碰硬件的那些补丁、一份启动配置和一个设备目录，再在真机上重新测一遍。
 
-| 机型 | 离 PW3 多远 |
-|---|---|
-| Voyage | 最近：亚马逊给它和 PW3 用同一份内核配置，内核已经能编出来 |
-| Oasis 1 | 内核已经能编出来，差 Wi‑Fi 驱动 |
-| Kindle 8、PW4 等 | 要换内核，显示部分能复用 |
-| PW5、Kindle 11 代、Scribe 等联发科机型 | 显示、Wi‑Fi、电源都要重写 |
-
-具体要做什么，见[移植到其他机型](docs/design/porting-to-other-models.md)。
+各机型离 PW3 多远，见上面的[其他机型](#其他机型)；具体要做什么，见[移植到其他机型](docs/design/porting-to-other-models.md)；合回这个仓库的规矩，见 [CONTRIBUTING](CONTRIBUTING.md) 的「移植到其他机型」。
 
 ## 许可
 

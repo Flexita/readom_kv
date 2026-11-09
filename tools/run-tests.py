@@ -139,6 +139,10 @@ TESTS = [
     ('verify-script', 'python', ['tools/tests/test_verify_script.py'], False),
     ('verify-device-answers', 'python', ['tools/tests/test_verify_device_answers.py'], False),
     ('export-refuses', 'python', ['tools/tests/test_export_refuses.py'], False),
+    # What a pull request may change (tools/check-pr-scope.py, which CI runs on
+    # every pull request): here, on pull requests made for it, half of which it
+    # has to refuse.
+    ('pr-scope', 'python', ['tools/tests/test_pr_scope.py'], False),
     # Here and not only in the commit hook: a guard that runs once per clone, if
     # somebody remembered to enable it (README, `git config core.hooksPath`), is
     # not a guard. This repository is meant to be published, so what it would

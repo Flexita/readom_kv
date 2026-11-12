@@ -327,7 +327,11 @@ static void test_voyage_refuses_before_compare(void) {
     struct dd_why why = {0};
     CHECK(dd_voyage_5_13_6.identity_ready == 0);
     CHECK(dd_voyage_5_13_6.stock_cmdline[0] == 0);
-    CHECK(dd_voyage_5_13_6.kernel_version[0] == 0);
+    CHECK(strcmp(dd_voyage_5_13_6.kernel_release, "3.0.35-lab126") == 0);
+    CHECK(strcmp(dd_voyage_5_13_6.kernel_version, "#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021") == 0);
+    CHECK(strcmp(dd_voyage_5_13_6.user_mount, "/mnt/base-us") == 0);
+    CHECK(dd_voyage_5_13_6.wifi_board[0] == 0);
+    CHECK(dd_voyage_5_13_6.wifi_firmware[0] == 0);
     CHECK(dd_pw3_5_16_2_1_1.identity_ready == 1);
     /* The fixture in `root` is a Paperwhite-shaped system. A Voyage profile
      * with no measured identity must refuse it instead of matching. */

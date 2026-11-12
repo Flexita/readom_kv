@@ -74,6 +74,75 @@ class VoyageProfile(unittest.TestCase):
         self.assertEqual(source['patches_applied'], 85)
         self.assertEqual(source['patches_failed'], 0)
 
+    def test_a_redacted_command_line_cannot_open_the_gate(self):
+        ready = json.loads(self.text)
+        ready['installable'] = True
+        ready['identity_ready'] = True
+        ready['device_confirmed'] = True
+        ready['measured'] = {
+            'eips_sha256': 'a' * 64,
+            'eips_bytes': 61104,
+            'uname_release': '3.0.35-lab126',
+            'uname_version': '#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021',
+            'machine_id': 4091,
+            'stock_cmdline': 'log_pos_goal=[redacted] console=ttymxc0,115200 ro ip=[redacted] quiet',
+            'ram': self.pw3['ram'],
+            'partition_table': {'sysfs_ro': 0},
+            'stock_functions': {'pm_test_show': {'bytes': 4, 'sha256': 'b' * 64}},
+        }
+        found = self.mod.problems(ready, self.pw3)
+        self.assertIn('measured.stock_cmdline contains a redacted value', found)
+
+    def test_partial_device_readings_still_cannot_be_built(self):
+        """eips, uname and RAM can be real while the handoff is still closed."""
+        ready = json.loads(self.text)
+        ready['installable'] = True
+        ready['identity_ready'] = True
+        ready['device_confirmed'] = True
+        ready['measured'] = {
+            'eips_sha256': '7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259',
+            'eips_bytes': 61104,
+            'uname_release': '3.0.35-lab126',
+            'uname_version': '#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021',
+            'machine_id': None,
+            'stock_cmdline': None,
+            'ram': [['0x80000000', '0x20000000']],
+            'partition_table': {'sysfs_ro_all_zero': True, 'root_mount': 'ro'},
+            'stock_functions': None,
+        }
+        found = self.mod.problems(ready, self.pw3)
+        self.assertIn('measured.machine_id is empty', found)
+        self.assertIn('measured.stock_cmdline is empty', found)
+        self.assertIn('measured.stock_functions is empty', found)
+        self.assertNotIn(self.mod.PW3_EIPS_SHA256, ready['measured']['eips_sha256'])
+
+    def test_probe_record_is_checked_when_the_profile_carries_it(self):
+        probe = self.voyage.get('device_probe')
+        if not probe:
+            return
+        self.assertEqual(probe['sha256'],
+                         'eab14ee928b2abaf6925d1fd2f04e461c1bc0525fef01a6cd5b9252b05864f15')
+        self.assertEqual(probe['bytes'], 2195)
+        self.assertEqual(probe['uid'], 0)
+        measured = self.voyage['measured']
+        self.assertEqual(measured['eips_sha256'],
+                         '7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259')
+        self.assertEqual(measured['eips_bytes'], 61104)
+        self.assertEqual(measured['uname_release'], '3.0.35-lab126')
+        self.assertEqual(measured['uname_version'],
+                         '#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021')
+        self.assertEqual(measured['ram'], [['0x80000000', '0x20000000']])
+        self.assertIsNone(measured['machine_id'])
+        self.assertIsNone(measured['stock_cmdline'])
+        self.assertIsNone(measured['stock_functions'])
+        self.assertIs(self.voyage['installable'], False)
+        self.assertIs(self.voyage['identity_ready'], False)
+        self.assertIs(self.voyage['device_confirmed'], False)
+        self.assertIn('log_pos_goal', probe['cmdline_redacted_keys'])
+        self.assertIn('ip', probe['cmdline_redacted_keys'])
+        self.assertNotIn('0x8fff0000', self.text)
+        self.assertNotIn('ip=off', probe['cmdline_filtered'])
+
     def test_source_verified_shared_values_are_not_refused(self):
         """4091 and 3.0.35-lab126 are in the Voyage GPL tree, not only on the PW3."""
         ready = json.loads(self.text)

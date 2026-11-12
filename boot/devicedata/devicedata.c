@@ -25,16 +25,23 @@ const struct dd_profile dd_pw3_5_16_2_1_1 = {
     1,
 };
 
-/* Voyage 5.13.6: nothing here was read off a device. identity_ready stays 0
- * so dd_device_matches refuses every machine, including one that looks like
- * the Paperwhite record above. Do not fill these strings from that record. */
+/* Voyage 5.13.6, from a root read-only probe on 2026-11-12 (report SHA-256
+ * eab14ee928b2abaf6925d1fd2f04e461c1bc0525fef01a6cd5b9252b05864f15).
+ * /proc/version was:
+ *   Linux version 3.0.35-lab126 (builder@eink-builds) (gcc version 4.9.1 (GCC) )
+ *   #2 PREEMPT Thu Apr 8 09:39:57 UTC 2021
+ * The user FAT is the loop mount at /mnt/base-us. identity_ready stays 0:
+ * log_pos_goal and ip were redacted from the command line and are not guessed,
+ * the running kernel's machine id was not read, and the stock function bodies
+ * were not hashed. Wi-Fi file paths were not in the probe. Do not copy the
+ * Paperwhite record above into the empty strings. */
 const struct dd_profile dd_voyage_5_13_6 = {
     "",
+    "/mnt/base-us",
     "",
     "",
-    "",
-    "",
-    "",
+    "3.0.35-lab126",
+    "#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021",
     0,
 };
 

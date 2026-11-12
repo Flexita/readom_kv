@@ -46,8 +46,18 @@ TARGET_COPY_OUT_VENDOR := system/vendor
 # and the Kindle's own volume gets those 64 MiB back for books -- this device
 # goes from 643.0 MiB free to about 707 MiB.
 BOARD_SYSTEMIMAGE_PARTITION_SIZE := 536870912
-# 1024 MiB data image, set on 2026-11-12 for a Voyage whose user volume is
-# about 3 GB in total, not 3 GB free. This is an estimate, not a Voyage df.
+# 1024 MiB data image. A Voyage probe on 2026-11-12 (root, read-only) measured
+# the chip and the user store separately. mmcblk0 is 7,733,248 sectors of 512
+# bytes (3,959,422,976 bytes), the 4 GB class the owner names; the computer's
+# "about 3.3 GB" is the user store, not the chip and not free space.
+# mmcblk0p4 is 6,385,664 sectors (3,269,459,968 bytes). The mounted FAT
+# (/mnt/us and /mnt/base-us) is 3,188,640 KiB total, the same 3113.9 MiB
+# figure previously known from a PW3, with 71,792 KiB free at the time of
+# the probe. sysfs ro=0 on every mmcblk0 node. That is the block read-only
+# flag. The root filesystem is a separate fact: the command line says ro and
+# / is mounted read-only. The installer writes files on the user FAT only,
+# and only after the identity gate. ro=0 is not permission to write the root
+# or boot partitions, and the mount flag is not a hardware lock.
 #
 # The previous size was 1792 MiB. On the one PW3 that number was measured
 # against (2026-11-03), /data held 748.7 MiB once WeRead was logged in and one
@@ -69,8 +79,10 @@ BOARD_SYSTEMIMAGE_PARTITION_SIZE := 536870912
 # The 64 MiB is spare for the stock system, logs and report.bin. It is not a
 # second copy of system.img: a torn write is replaced on the next tap from
 # the payload, and the stock Kindle is what a failed Android returns to.
-# On a 3 GiB volume that is empty, about 1.44 GiB remains for Kindle books.
-# Neither the 3 GiB figure nor the 748.7 MiB figure was measured on a Voyage.
+# On the measured FAT of 3113.9 MiB with nothing else on it, about 1.51 GiB
+# would remain for Kindle books. The probe's 70 MiB free is far under
+# 1600 MiB, so that device state cannot install. The requirement is not
+# lowered to fit. The 748.7 MiB one-book /data reading is still a PW3 number.
 # The system image stays 512 MiB: the last built image used 452.9 MiB and this
 # tree was not rebuilt, so shrinking the system file would be a lie.
 # Of the 1024 MiB, pw3-storage-floor.sh asks Android to treat the volume as

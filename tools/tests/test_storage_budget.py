@@ -50,9 +50,15 @@ class StorageBudget(unittest.TestCase):
         self.assertLess(payload, data)
         need = max(payload + system, system + data) + reserve
         self.assertEqual(need, 1600 * MIB)
-        # A 3 GiB volume with nothing else on it would still keep this much
-        # for Kindle books. 3 GiB is the stated total, not a measurement.
-        self.assertGreater(3 * 1024 * MIB - need, 1400 * MIB)
+        # Voyage probe: FAT total 3,188,640 KiB, free 71,792 KiB. The chip is
+        # 7,733,248 sectors. Free space on that probe is not the install budget.
+        fat_total = 3188640 * 1024
+        fat_free = 71792 * 1024
+        disk = 7733248 * 512
+        self.assertEqual(disk, 3959422976)
+        self.assertGreater(fat_total - need, 1400 * MIB)
+        self.assertLess(fat_free, need)
+        self.assertIn('7,733,248 sectors', BOARD.read_text())
 
     def test_data_image_floor_is_explicit(self):
         text = FLOOR.read_text()

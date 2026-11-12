@@ -1,13 +1,13 @@
 {
-  "description": "Kindle Voyage (7th generation), stock firmware 5.13.6. Root read-only probes and an offline unpack of the official update.bin filled the readings that were complete. MACH_TYPE 4091 is a source-proven build pin from the matching stock Image, not a /proc reading. Not installable: /proc/bootmode was empty (blocks ATAG construction), identity_ready stays false, and no Voyage Android image has been built.",
+  "description": "Kindle Voyage (7th generation), stock firmware 5.13.6. Root read-only probes and an offline unpack of the official update.bin filled the readings that were complete. MACH_TYPE 4091 is a source-proven build pin from the matching stock Image, not a /proc reading. measured.bootmode is main (dedicated probe 2026-11-12). Still not installable: identity_ready / device_confirmed stay false, no finished Voyage Android image, free-space cleanup and first-boot authorization are not granted.",
   "installable": false,
   "identity_ready": false,
   "device_confirmed": false,
   "module_profile": 3,
   "machine": 4091,
   "machine_why": "TARGET_MACHINE / transition r1. Offline: GPL mach-types mx6sl_wario=4091; imx60_wario_defconfig enables only CONFIG_MACH_MX6SL_WARIO; matching stock Image machine_desc.nr is 4091 next to name Freescale i.MX 6SoloLite based Wario Board (same Hardware string the device reported). ATAGs do not carry this number. measured.machine_id stays null.",
-  "supported_zh": "Kindle Voyage（第 7 代），固件 5.13.6。eips、uname、命令行、分区起点、四个原厂函数体和 MACH_TYPE 4091（离线可证）已有证据。这个构建仍不能安装：/proc/bootmode 为空，尚无 Voyage Android 镜像。",
-  "supported_en": "Kindle Voyage (7th generation), firmware 5.13.6. eips, uname, the command line, partition starts, the four stock function bodies and MACH_TYPE 4091 (proven offline) have evidence. This build still cannot be installed: /proc/bootmode was empty and no Voyage Android image exists.",
+  "supported_zh": "Kindle Voyage（第 7 代），固件 5.13.6。eips、uname、命令行、分区起点、四个原厂函数体、MACH_TYPE 4091（离线可证）和 bootmode=main（专用探针）已有证据。仍不能安装：三旗标未开、尚无完成的 Voyage Android 镜像，空间清理与首次启动未授权。",
+  "supported_en": "Kindle Voyage (7th generation), firmware 5.13.6. eips, uname, the command line, partition starts, the four stock function bodies, MACH_TYPE 4091 (proven offline) and bootmode=main (dedicated probe) have evidence. Still not installable: the three flags stay closed, no finished Voyage Android image, and free-space cleanup / first boot are not authorized.",
   "measured": {
     "eips_sha256": "7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259",
     "eips_bytes": 61104,
@@ -29,13 +29,52 @@
       "starts_unit": "512-byte sectors from sysfs",
       "starts_note": "start was read for mmcblk0p1..p4 only. The whole disk and the boot nodes have no start in the extra probe by design.",
       "devices": [
-        {"name": "mmcblk0", "sectors_512": 7733248, "blocks_1k": 3866624, "sysfs_ro": 0},
-        {"name": "mmcblk0p1", "sectors_512": 921600, "blocks_1k": 460800, "start_512": 65536, "sysfs_ro": 0},
-        {"name": "mmcblk0p2", "sectors_512": 131072, "blocks_1k": 65536, "start_512": 987136, "sysfs_ro": 0},
-        {"name": "mmcblk0p3", "sectors_512": 131072, "blocks_1k": 65536, "start_512": 1118208, "sysfs_ro": 0},
-        {"name": "mmcblk0p4", "sectors_512": 6385664, "blocks_1k": 3192832, "start_512": 1249280, "sysfs_ro": 0},
-        {"name": "mmcblk0boot0", "sectors_512": 4096, "blocks_1k": 2048, "sysfs_ro": 0},
-        {"name": "mmcblk0boot1", "sectors_512": 4096, "blocks_1k": 2048, "sysfs_ro": 0}
+        {
+          "name": "mmcblk0",
+          "sectors_512": 7733248,
+          "blocks_1k": 3866624,
+          "sysfs_ro": 0
+        },
+        {
+          "name": "mmcblk0p1",
+          "sectors_512": 921600,
+          "blocks_1k": 460800,
+          "start_512": 65536,
+          "sysfs_ro": 0
+        },
+        {
+          "name": "mmcblk0p2",
+          "sectors_512": 131072,
+          "blocks_1k": 65536,
+          "start_512": 987136,
+          "sysfs_ro": 0
+        },
+        {
+          "name": "mmcblk0p3",
+          "sectors_512": 131072,
+          "blocks_1k": 65536,
+          "start_512": 1118208,
+          "sysfs_ro": 0
+        },
+        {
+          "name": "mmcblk0p4",
+          "sectors_512": 6385664,
+          "blocks_1k": 3192832,
+          "start_512": 1249280,
+          "sysfs_ro": 0
+        },
+        {
+          "name": "mmcblk0boot0",
+          "sectors_512": 4096,
+          "blocks_1k": 2048,
+          "sysfs_ro": 0
+        },
+        {
+          "name": "mmcblk0boot1",
+          "sectors_512": 4096,
+          "blocks_1k": 2048,
+          "sysfs_ro": 0
+        }
       ],
       "user_fat": {
         "mount": "/mnt/us",
@@ -71,7 +110,9 @@
         "addr": "0xc016360c"
       }
     },
-    "stock_functions_source": "Offline format parse of the official update_kindle_voyage_5.13.6.bin (download SHA-256 80856a11…7a155b; that hash is integrity of the downloaded file, not an RSA signature check). KindleTool extract unpacked SP01→FB03 Recovery V2 without --unsigned and without modifying signatures. uImage sha256 add9b0a29a769c241144bf245de2b94848d24aabb5765662714d0afde5a9ca32 (IH_NAME Linux-3.0.35-lab126, load 0x80008000, uncompressed). zImage payload sha256 934302ee62ff8eea3aa41f1c2c5fef465e28590567573b7eaab084158c35e74e. Inflated Image sha256 bb15c17193f8a3b8dba3d27433fd7e6322ac013defcbff5c950ceee703f76530 contains the exact device banner Linux version 3.0.35-lab126 (builder@eink-builds) (gcc version 4.9.1 (GCC) ) #2 PREEMPT Thu Apr 8 09:39:57 UTC 2021. Bodies are SHA-256 of each symbol through the next kallsyms address, file offset = addr - 0xc0008000. Not the rebuilt Android kernel. Extracted code was not executed."
+    "stock_functions_source": "Offline format parse of the official update_kindle_voyage_5.13.6.bin (download SHA-256 80856a11…7a155b; that hash is integrity of the downloaded file, not an RSA signature check). KindleTool extract unpacked SP01→FB03 Recovery V2 without --unsigned and without modifying signatures. uImage sha256 add9b0a29a769c241144bf245de2b94848d24aabb5765662714d0afde5a9ca32 (IH_NAME Linux-3.0.35-lab126, load 0x80008000, uncompressed). zImage payload sha256 934302ee62ff8eea3aa41f1c2c5fef465e28590567573b7eaab084158c35e74e. Inflated Image sha256 bb15c17193f8a3b8dba3d27433fd7e6322ac013defcbff5c950ceee703f76530 contains the exact device banner Linux version 3.0.35-lab126 (builder@eink-builds) (gcc version 4.9.1 (GCC) ) #2 PREEMPT Thu Apr 8 09:39:57 UTC 2021. Bodies are SHA-256 of each symbol through the next kallsyms address, file offset = addr - 0xc0008000. Not the rebuilt Android kernel. Extracted code was not executed.",
+    "bootmode": "main",
+    "bootmode_note": "Recorded by tools/voyage-probe-bootmode.sh on 2026-11-12. Report sha256 eb98afc157f42877c40ea9032dd06ce23475dcb635c83a5a325c49645eb0292e (337 bytes). Satisfies the dd_atags main check only. Does not open installable / identity_ready / device_confirmed and is not a Voyage Android boot result."
   },
   "device_probe": {
     "sha256": "eab14ee928b2abaf6925d1fd2f04e461c1bc0525fef01a6cd5b9252b05864f15",
@@ -87,7 +128,10 @@
     "cpu_part": "0xc09",
     "iomem_system_ram": "80000000-9fffffff",
     "cmdline_filtered": "rootwait log_pos_goal=[redacted] console=ttymxc0,115200 root=/dev/mmcblk0p1 ro ip=[redacted] quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M",
-    "cmdline_redacted_keys": ["log_pos_goal", "ip"],
+    "cmdline_redacted_keys": [
+      "log_pos_goal",
+      "ip"
+    ],
     "cmdline_withheld": "The first probe redacted log_pos_goal and ip. The extra probe later kept allow-listed values; measured.stock_cmdline uses that second report.",
     "capacity_note": "The owner states the chip is 4 GB and USB shows about 3.3 GB. mmcblk0 is 3959422976 bytes. mmcblk0p4 is 3269459968 bytes. The mounted FAT is 3265167360 bytes total and had 73515008 bytes free. None of these is 3 GB of free space."
   },
@@ -100,18 +144,34 @@
     "result": "partial",
     "errors": 1,
     "bootmode": "",
-    "bootmode_note": "error: bootmode empty. The file existed and read as empty. That is not main and is not written into any handoff field.",
+    "bootmode_note": "Historical: this extra probe read an empty /proc/bootmode (errors: 1). A later dedicated bootmode-only probe recorded main; see device_probe_bootmode and measured.bootmode. The empty value here is not rewritten.",
     "machine_id": "not collected",
     "machine_id_note": "Not a missing /proc reading of MACH_TYPE: that number is not published by any ordinary proc file. profile.machine=4091 is proven offline from the matching stock Image machine_desc.nr. /proc/atags was not read (board id and MAC).",
     "cmdline_kept": "rootwait log_pos_goal=0x8fff0000 console=ttymxc0,115200 root=/dev/mmcblk0p1 ro ip=off quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M",
     "cmdline_withheld_keys": [],
     "wifi_modules_loaded": [],
-    "wifi_modules_absent": ["ar6000", "ath6kl_sdio", "ath6kl"],
+    "wifi_modules_absent": [
+      "ar6000",
+      "ath6kl_sdio",
+      "ath6kl"
+    ],
     "wifi_candidates": [
-      {"path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/AR6803_default.bin", "bytes": 2048},
-      {"path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/AR6003_wfo_calfile.bin", "bytes": 2048},
-      {"path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/fw-4.bin", "bytes": 92991},
-      {"path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/athwlan.bin", "bytes": 114064}
+      {
+        "path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/AR6803_default.bin",
+        "bytes": 2048
+      },
+      {
+        "path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/AR6003_wfo_calfile.bin",
+        "bytes": 2048
+      },
+      {
+        "path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/fw-4.bin",
+        "bytes": 92991
+      },
+      {
+        "path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/athwlan.bin",
+        "bytes": 114064
+      }
     ],
     "wifi_note": "Airplane mode: modules were not loaded. Candidate ordinary files exist with the sizes above. That is not a confirmed runtime driver path.",
     "wifim": "absent"
@@ -152,5 +212,18 @@
     "patches_applied": 85,
     "patches_failed": 0,
     "patches_note": "On 2026-11-12 every patch under patches/*.patch and patches/android-core/*.patch applied with tools/apply-patch-series.py onto a fresh tree of this member. That is a source result, not a boot."
+  },
+  "device_probe_bootmode": {
+    "sha256": "eb98afc157f42877c40ea9032dd06ce23475dcb635c83a5a325c49645eb0292e",
+    "bytes": 337,
+    "generated": "Thu Nov 12 06:16:17 UTC 2026",
+    "uid": 0,
+    "marker": "VOYAGE_PROBE_BOOTMODE_DONE",
+    "result": "ok",
+    "errors": 0,
+    "bootmode": "main",
+    "script": "tools/voyage-probe-bootmode.sh",
+    "privacy": "Owner-reviewed; no identity nodes or memory devices.",
+    "note": "New runtime reading only. Does not explain the earlier empty extra-probe reading. Does not authorize installable, first boot, or space cleanup."
   }
 }

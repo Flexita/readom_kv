@@ -16,6 +16,14 @@
 Proves the stock rootfs on p1 is up. Does **not** prove idme `system_bootmode == main`.
 Lab126 publishes bootmode from idme via `boardid.c`; an empty proc file is an empty idme field at read time.
 
+## 2026-11-12 dedicated probe (verified)
+
+Report: 337 bytes, SHA-256 `eb98afc157f42877c40ea9032dd06ce23475dcb635c83a5a325c49645eb0292e`,
+`generated: Thu Nov 12 06:16:17 UTC 2026`, `uid=0`, `bootmode: main`, `result: ok`,
+`VOYAGE_PROBE_BOOTMODE_DONE`. Stored as `device_probe_bootmode` and `measured.bootmode=main`.
+Historical empty reading in `device_probe_extra` is kept. This fills the bootmode gate only;
+`installable` / `identity_ready` / `device_confirmed` stay false.
+
 ## What not to do
 
 - Do not write `main` into the profile because the device “looks normal”.

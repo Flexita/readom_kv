@@ -69,18 +69,17 @@ So `profile.machine = 4091` is a **source-proven build pin**, not a `/proc` read
 
 ## Real first-boot risks (not profile padding)
 
-### Empty `/proc/bootmode`, yet `root=/dev/mmcblk0p1` and a running UI — what that proves
+### bootmode: historical empty read vs 2026-11-12 dedicated probe `main`
 
-| Fact | Proves |
+| Record | Content |
 |---|---|
-| cmdline `root=/dev/mmcblk0p1` | Root filesystem is on p1; consistent with the main partition layout |
-| Normal UI / root shell | Stock Kindle is running; **not** a sufficient proof of diags vs main bootmode |
-| `/proc/bootmode` exists and is empty | The string `boardid.c` publishes from idme `system_bootmode` is empty now |
-| Together | **Does not** imply `bootmode == main` |
+| `device_probe_extra` (earlier) | `/proc/bootmode` was **empty** (`errors: 1`); kept as recorded; no rewrite, no inferred cause |
+| `device_probe_bootmode` (new) | 337 bytes, SHA-256 `eb98afc1…292e`, `uid=0`, `bootmode: main`, `result: ok`, `VOYAGE_PROBE_BOOTMODE_DONE` |
+| `measured.bootmode` | `main` (from that dedicated probe) |
 
-Code (`dd_atags`): reads `/proc/bootmode`, refuses unless `strcmp(mode, "main") == 0`, then still writes a hardcoded `"main"` into the ATAG. Handoff needs a **runtime** reading of exactly `main`, not the cmdline root=.
+`root=/dev/mmcblk0p1` only names the root block device; it is **not** bootmode. Code: `dd_atags` requires a runtime reading of exactly `main`. Gate: `_voyage_bootmode_gate` requires recorded `main` before opening the three flags.
 
-`root=mmcblk0p1` is **not** a substitute. Do not rewrite `/proc`; do not invent `main`. Minimal probe: `tools/voyage-probe-bootmode.sh`. Gate: `voyage_profile._voyage_bootmode_gate` refuses opening `installable` / `identity_ready` / `device_confirmed` unless a recorded bootmode reading is exactly `main` (empty / diags / missing all fail), with failing tests.
+**Filling this gate ≠ installable / bootable.** The three flags stay false; no finished Voyage `system.img`; free-space cleanup and first boot are unauthorized; Wi‑Fi driver path, user-store writes, and recovery remain unverified.
 
 ### How a null `measured.machine_id` blocks packaging (honest layering)
 
@@ -108,4 +107,4 @@ Scripts assume hostname `lima-pw3` plus a Jammy x86 chroot. This cloud host is x
 
 ## Gates
 
-`installable` / `identity_ready` / `device_confirmed` stay false without `bootmode=main`, a finished Voyage image, owner-confirmed free-space cleanup, and explicit first-boot authorization. A PW3 image must not stand in.
+`installable` / `identity_ready` / `device_confirmed` stay false. `bootmode=main` is now on record, but a finished Voyage image, owner-confirmed free-space cleanup, and explicit first-boot authorization are still missing. Do not open the three flags for a single field. A PW3 image must not stand in.

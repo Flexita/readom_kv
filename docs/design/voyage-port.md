@@ -71,18 +71,17 @@ ATAG 协议本身不携带 ARM `MACH_TYPE`。该值在进内核时由 bootloader
 
 ## 首次启动的真实风险（不是填空）
 
-### `/proc/bootmode` 为空，但 `root=/dev/mmcblk0p1` 且系统在跑——能证明什么
+### bootmode：历史空读与 2026-11-12 专用探针 `main`
 
-| 事实 | 证明到 |
+| 记录 | 内容 |
 |---|---|
-| cmdline `root=/dev/mmcblk0p1` | 当前根文件系统挂在 p1；与「主分区布局」一致 |
-| 设备正常 UI / root shell | 库存 Kindle 正在跑；**不是** diags 分区上的诊断系统的充分证明 |
-| `/proc/bootmode` 文件存在且内容为空 | `boardid.c` 从 idme `system_bootmode` 发布的字符串此时为空 |
-| 合起来 | **不能**推出 `bootmode == main` |
+| `device_probe_extra`（较早） | `/proc/bootmode` **空串**（`errors: 1`）；保留原样，不改写、不推断原因 |
+| `device_probe_bootmode`（新） | 337 字节，SHA-256 `eb98afc1…292e`，`uid=0`，`bootmode: main`，`result: ok`，`VOYAGE_PROBE_BOOTMODE_DONE` |
+| `measured.bootmode` | `main`（来自上条专用探针） |
 
-代码语义（`boot/devicedata/devicedata.c` `dd_atags`）：读 `/proc/bootmode`，`strcmp(mode, "main")` 失败即拒绝；通过后写入 ATAG 的 bootmode 字面量仍是硬编码的 `"main"`。因此交接路径要的是**运行时**恰好为 `main` 的读数，不是 cmdline 里的 root=。
+`root=/dev/mmcblk0p1` 只证明根在 p1，**不能**冒充 bootmode。代码：`dd_atags` 要求运行时恰好 `main`。闸门：`_voyage_bootmode_gate` 在打开三旗标时要求已记录 `main`。
 
-`root=mmcblk0p1` **不能**替代。不要改 `/proc` 文件、不要把空串写成 `main`。已有最小只读脚本：`tools/voyage-probe-bootmode.sh`（只读这一项）。闸门：`voyage_profile._voyage_bootmode_gate` 在 `installable` / `identity_ready` / `device_confirmed` 任一为 true 时要求已记录的 bootmode 恰好为 `main`（空串 / diags / 未采都会拒绝），有失败测试。
+**只补齐此闸门 ≠ 可安装 / 可启动。** `installable` / `identity_ready` / `device_confirmed` 仍为 false；尚无完成的 Voyage `system.img`；空间清理与首次启动未授权；Wi‑Fi 驱动路径、用户区写入与恢复路径仍标 unverified。
 
 ### 缺 `measured.machine_id` 如何挡住打包（诚实分层）
 
@@ -110,4 +109,4 @@ ATAG 协议本身不携带 ARM `MACH_TYPE`。该值在进内核时由 bootloader
 
 ## 闸门
 
-`installable` / `identity_ready` / `device_confirmed` 仍为 false。缺 bootmode=`main`、缺完成的 Voyage 镜像、缺用户确认的空间清理与首次启动授权时，不得打开。不得用旧 PW3 镜像冒充。
+`installable` / `identity_ready` / `device_confirmed` 仍为 false。bootmode=`main` 已补齐，但仍缺完成的 Voyage 镜像、用户确认的空间清理与首次启动授权。不得因单一字段通过而打开三旗标。不得用旧 PW3 镜像冒充。

@@ -73,7 +73,9 @@ class VoyageProfile(unittest.TestCase):
         forged['installable'] = True
         forged['identity_ready'] = True
         forged['device_confirmed'] = True
-        self.assertEqual(forged['device_probe_extra']['bootmode'], '')
+        # Isolate the historical empty extra-probe reading.
+        forged['measured'].pop('bootmode', None)
+        forged['device_probe_extra']['bootmode'] = ''
         found = self.mod.problems(forged, self.pw3)
         self.assertTrue(
             any('bootmode reading is empty' in i for i in found), found)
@@ -88,6 +90,7 @@ class VoyageProfile(unittest.TestCase):
         ready['installable'] = True
         ready['identity_ready'] = True
         ready['device_confirmed'] = True
+        ready['measured'].pop('bootmode', None)
         found = self.mod.problems(ready, self.pw3)
         self.assertTrue(any('bootmode reading is empty' in i for i in found), found)
 
@@ -96,9 +99,28 @@ class VoyageProfile(unittest.TestCase):
         forged['installable'] = True
         forged['identity_ready'] = True
         forged['device_confirmed'] = True
+        forged['measured'].pop('bootmode', None)
         forged['device_probe_extra']['bootmode'] = 'diags'
         found = self.mod.problems(forged, self.pw3)
         self.assertTrue(any("bootmode reading is 'diags'" in i for i in found), found)
+
+    def test_bootmode_main_does_not_auto_open_installable(self):
+        """A verified main reading fills that gate only; flags stay closed."""
+        self.assertEqual(self.voyage['measured']['bootmode'], 'main')
+        self.assertEqual(
+            self.voyage['device_probe_bootmode']['sha256'],
+            'eb98afc157f42877c40ea9032dd06ce23475dcb635c83a5a325c49645eb0292e')
+        self.assertEqual(self.voyage['device_probe_bootmode']['bytes'], 337)
+        self.assertEqual(self.voyage['device_probe_bootmode']['bootmode'], 'main')
+        self.assertEqual(self.voyage['device_probe_bootmode']['result'], 'ok')
+        self.assertIs(self.voyage['installable'], False)
+        self.assertIs(self.voyage['identity_ready'], False)
+        self.assertIs(self.voyage['device_confirmed'], False)
+        found = self.mod.problems(self.voyage, self.pw3)
+        self.assertIn('installable is not true', found)
+        self.assertIn('identity_ready is not true', found)
+        self.assertIn('device_confirmed is not true', found)
+        self.assertFalse(any('bootmode' in i for i in found), found)
 
     def test_the_historical_pw3_profile_cannot_be_built_either(self):
         self.assertIs(self.pw3.get('installable'), False)

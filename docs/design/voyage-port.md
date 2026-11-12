@@ -48,21 +48,49 @@ Image 里带有与真机完全一致的横幅：`Linux version 3.0.35-lab126 (bu
 | 用户 FAT loop | backing `/dev/mmcblk0p4`，offset 8192 |
 | stock_functions | 见上，来自与 uname 一致的官方 Image |
 
-不能补、也不猜的：
+## MACH_TYPE（machine_id）审计结论
 
-- `measured.machine_id` 仍是 null。没有只发布该数字的普通 proc 文件；`/proc/atags` 还带着 board id 和 MAC，不读。源码里的 4091 只留在 `source`。
-- `/proc/bootmode` 读出来是空字符串。这是补充报告里唯一的 error，**不能**写成 `main`。
-- Wi-Fi：飞行模式下 `ar6000` / `ath6kl*` 未加载。`/opt/ar6k/...` 下有候选普通文件及大小，**不等于**已确认的运行时驱动路径。
-- 不读 `/proc/kcore`、`/dev/mem`、引导分区或任意为取内核而打开的块设备。公开固件已给出匹配内核，因此不再产出根文件系统内核文件探测脚本。
+交接链里这个数字的消费者：
 
-`tools/voyage_profile.py` 仍要求 `installable`、`identity_ready`、`device_confirmed` 和全部 `measured` 键。缺 `machine_id` 时构建照样退出。运行时 `CHECK_PROFILE == 3` 在加载模块和 `install()` 之前停在 E105。
+| 位置 | 作用 |
+|---|---|
+| `native_init` | `__machine_arch_type != TARGET_MACHINE` 则拒绝加载模块 |
+| `transition.S` | 把 `PT_MACHINE` 装进 **r1**，按 ARM 启动约定交给新内核 |
+| `pw_plan_validate` | 只检查计划里 `machine_id == expected_machine_id`（两者都来自 `TARGET_MACHINE`），**不**从 ATAG 读机器号 |
+| `dd_atags` | **不**写入 MACH_TYPE；ATAG 里是 board id / MAC / bootmode 等 Lab126 扩展 |
 
-## 空间
+ATAG 协议本身不携带 ARM `MACH_TYPE`。该值在进内核时由 bootloader 放进 r1，原厂内核存为 `__machine_arch_type`。
 
-系统镜像 512 MiB，数据镜像 1024 MiB，格式号 2。安装峰值仍是 **1600 MiB 空闲**。这次报告的用户区空闲只有约 70 MiB，不够，门槛不因此降低。
+离线可证（匹配 Image `bb15c171…76530` + GPL）：
 
-## 还没做、所以不能说能启动
+- `arch/arm/tools/mach-types`：`mx6sl_wario` = **4091**
+- `imx60_wario_defconfig`：仅 `CONFIG_MACH_MX6SL_WARIO=y`
+- Image 里 `machine_desc.nr` = 4091，紧挨名称指针指向 `Freescale i.MX 6SoloLite based Wario Board`（与真机 Hardware 行一致）
 
-运行时机器号到齐、并把 `identity_ready` / `device_confirmed` / `installable` 按证据打开之前，不能打包可安装入口，也不能在设备上启动。即便以后到齐，第一次启动 Android 仍是单独的一步，这一轮没有授权。
+因此 `profile.machine = 4091` 是**源码/匹配内核可证的构建钉**，不是 `/proc` 实测。`measured.machine_id` **必须保持 null**；闸门不再机械要求一个内核没有单独暴露的接口。把 4091 写进 `measured` 会在校验器里被拒绝。
 
-若要把采集扩大到引导分区或内存：先单独说明必要性与风险，这一轮不执行。
+## 首次启动的真实风险（不是填空）
+
+- **`/proc/bootmode` 为空**：`dd_atags` 要求恰好为 `main`，否则无法构造交接 ATAG。这是真实阻塞。`tools/voyage-probe-bootmode.sh` 只再读这一项；空串不得改成 `main`。
+- **Wi-Fi**：飞行模式下模块未加载；候选文件存在 ≠ 驱动路径。影响联网，不挡住 MACH_TYPE/函数体校验，但首次可用体验会缺网。
+- **用户区空闲 ~70 MiB**：安装峰值仍要 **1600 MiB**。不因此自动删除设备上的任何文件；清理须用户确认。
+- **尚无 Voyage 的 Android system.img**：见下一节。不能用旧 PW3 镜像冒充。
+
+## Android 镜像构建状态（云端实测）
+
+项目脚本默认假定 Lima 主机名 `lima-pw3` + Jammy x86 chroot（`CONTRIBUTING.md`：Linux 主机一条龙尚未完成）。本云主机是 x86_64 Ubuntu 24.04：
+
+| 项 | 实测 |
+|---|---|
+| 磁盘 | 约 244 GiB 可用，够 shallow AOSP |
+| 内存 | 显示 15 GiB，balloon ~10 GiB，无 swap；全量 `m` 可能吃紧 |
+| OpenJDK 8 | 已安装 |
+| python2.7 | **发行版仓库无**（Noble 已移除）——官方 chroot 路径仍要 Jammy 才能装 python2.7 |
+| `repo init -b android-8.1.0_r81` | **已成功**（`/home/ubuntu/android-src`） |
+| `repo sync` | **进行中**（云端，不往 Mac checkout） |
+| `run-aosp-build-job.sh` | 仍硬性要求 `hostname=lima-pw3` 与 `/srv/aosp-x86`；**未改脚本绕过**，也未完成编译 |
+| 产物 | 无 Voyage `system.img`；状态 = **准备/同步中**，不是编译完成，更不是可启动 |
+
+## 闸门
+
+`installable` / `identity_ready` / `device_confirmed` 仍为 false。缺 bootmode=`main` 的可靠读数、缺 Voyage 镜像、缺用户确认的空间清理与首次启动授权时，不得打开。

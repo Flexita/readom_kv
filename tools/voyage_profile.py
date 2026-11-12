@@ -13,9 +13,13 @@ VOYAGE_PROFILE = ROOT / 'boot/profiles/voyage-5.13.6.json'
 PW3_PROFILE = ROOT / 'boot/profiles/pw3-5.16.2.1.1.json'
 # The stock display binary the PW3 entry pins. It is not a Voyage measurement.
 PW3_EIPS_SHA256 = '73eb0d2532f9c899e98fb8feacb7a085ab0652f628f1c2c7b2e2d1cefae3f4ae'
+# Keys that must be real device readings (or offline hashes of the matching
+# stock Image). machine_id is not in this list: the ARM MACH_TYPE is not
+# published by any ordinary proc file, and inventing a /proc reading of it
+# would be false. See docs/design/voyage-port.md.
 MEASURED_KEYS = (
     'eips_sha256', 'eips_bytes', 'uname_release', 'uname_version',
-    'machine_id', 'stock_cmdline', 'ram', 'partition_table', 'stock_functions',
+    'stock_cmdline', 'ram', 'partition_table', 'stock_functions',
 )
 
 
@@ -59,6 +63,32 @@ def _copied_pw3_handoff(profile, pw3):
     return found
 
 
+def _voyage_machine_pin(profile):
+    """Voyage MACH_TYPE is a source-proven build pin, not a /proc reading.
+
+    Consumers: TARGET_MACHINE in the handoff module (native_init compares
+    __machine_arch_type; transition.S loads it into r1 for the new kernel).
+    ATAGs do not carry this number. The matching stock Image's machine_desc.nr
+    and the GPL mach-types / defconfig already prove 4091.
+    """
+    if profile.get('module_profile') != 3:
+        return []
+    found = []
+    measured = profile.get('measured') or {}
+    if measured.get('machine_id') is not None:
+        found.append(
+            'measured.machine_id must stay null: no ordinary proc publishes only '
+            'the ARM MACH_TYPE (do not invent a reading)')
+    machine = profile.get('machine')
+    source = profile.get('source') or {}
+    stock_nr = source.get('stock_machine_desc_nr')
+    if machine != SOURCE_SHARED_MACHINE_ID:
+        found.append('machine is not the Voyage Wario MACH_TYPE 4091')
+    if stock_nr != SOURCE_SHARED_MACHINE_ID:
+        found.append('source.stock_machine_desc_nr does not prove MACH_TYPE 4091')
+    return found
+
+
 def problems(profile, pw3=None):
     """Why this profile must not be built into an entry someone can install."""
     if profile.get('module_profile') == 2:
@@ -80,6 +110,7 @@ def problems(profile, pw3=None):
     cmdline = measured.get('stock_cmdline')
     if isinstance(cmdline, str) and '[redacted]' in cmdline:
         found.append('measured.stock_cmdline contains a redacted value')
+    found.extend(_voyage_machine_pin(profile))
     if pw3 is not None:
         found.extend(_copied_pw3_handoff(profile, pw3))
     return found

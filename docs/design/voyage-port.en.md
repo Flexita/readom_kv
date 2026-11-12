@@ -46,21 +46,49 @@ Already written into `measured`:
 | user FAT loop | backing `/dev/mmcblk0p4`, offset 8192 |
 | stock_functions | as above, from the official Image that matches this uname |
 
-Not filled, and not guessed:
+## MACH_TYPE (`machine_id`) audit
 
-- `measured.machine_id` stays null. No ordinary proc file publishes only that number; `/proc/atags` also carries the board id and MAC, so it is not read. Source `4091` stays under `source` only.
-- `/proc/bootmode` read as an empty string. That is the extra report's only error and is **not** written as `main`.
-- Wi-Fi: under airplane mode, `ar6000` / `ath6kl*` were not loaded. Candidate ordinary files under `/opt/ar6k/...` exist with sizes; that is **not** a confirmed runtime driver path.
-- No reads of `/proc/kcore`, `/dev/mem`, boot partitions, or block devices opened to dig out a kernel. The public firmware already yielded a matching kernel, so no rootfs kernel-file probe script is produced.
+Consumers in this boot chain:
 
-`tools/voyage_profile.py` still requires `installable`, `identity_ready`, `device_confirmed` and every `measured` key. A missing `machine_id` still exits the build. At runtime `CHECK_PROFILE == 3` stops at E105 before the module load and `install()`.
+| Site | Role |
+|---|---|
+| `native_init` | refuses the module if `__machine_arch_type != TARGET_MACHINE` |
+| `transition.S` | loads `PT_MACHINE` into **r1** for the new kernel (ARM boot protocol) |
+| `pw_plan_validate` | only checks `machine_id == expected_machine_id` on the plan (both from `TARGET_MACHINE`); does **not** read a machine number from ATAGs |
+| `dd_atags` | does **not** write MACH_TYPE; Lab126 ATAGs carry board id / MAC / bootmode |
 
-## Space
+ATAGs do not carry the ARM `MACH_TYPE`. The bootloader puts it in r1; the stock kernel keeps it as `__machine_arch_type`.
 
-System image 512 MiB, data image 1024 MiB, format 2. Install peak free space stays **1600 MiB**. This report's user area had only about 70 MiB free; the floor is not lowered.
+Proven offline (matching Image `bb15c171…76530` + GPL):
 
-## Still missing before a first boot claim
+- `arch/arm/tools/mach-types`: `mx6sl_wario` = **4091**
+- `imx60_wario_defconfig`: only `CONFIG_MACH_MX6SL_WARIO=y`
+- Image `machine_desc.nr` = 4091 next to the name pointer for `Freescale i.MX 6SoloLite based Wario Board` (same Hardware string the device reported)
 
-Until a runtime machine id is collected and `identity_ready` / `device_confirmed` / `installable` are opened on evidence, an installable entry is not packed and the device is not started. A first Android boot would still be a separate step after that, and this round does not authorize it.
+So `profile.machine = 4091` is a **source-proven build pin**, not a `/proc` reading. `measured.machine_id` **must stay null**. Writing 4091 into `measured` is refused by the checker.
 
-Any expansion into boot partitions or memory needs a separate necessity-and-risk note first; it is not done in this round.
+## Real first-boot risks (not profile padding)
+
+- **Empty `/proc/bootmode`**: `dd_atags` requires exactly `main` or it will not build the handoff ATAG list. That is a real block. `tools/voyage-probe-bootmode.sh` re-reads only that field; an empty string must not become `main`.
+- **Wi-Fi**: modules were not loaded under airplane mode; candidate files ≠ driver path. That hurts connectivity after boot, not MACH_TYPE / function-body checks.
+- **~70 MiB free on the user store**: install peak stays **1600 MiB**. No automatic deletion of device files; cleanup needs the owner's confirmation.
+- **No Voyage Android `system.img` yet**: see below. A PW3 image must not stand in.
+
+## Android image build status (measured on this cloud host)
+
+Project scripts assume Lima hostname `lima-pw3` plus a Jammy x86 chroot (`CONTRIBUTING.md`: a one-shot Linux host build is not done). This cloud host is x86_64 Ubuntu 24.04:
+
+| Item | Measured |
+|---|---|
+| Disk | ~244 GiB free; enough for a shallow AOSP tree |
+| Memory | 15 GiB reported, ~10 GiB ballooned, no swap; a full `m` may be tight |
+| OpenJDK 8 | installed |
+| python2.7 | **absent from the distro** (Noble removed it); the documented chroot path still needs Jammy for python2.7 |
+| `repo init -b android-8.1.0_r81` | **succeeded** under `/home/ubuntu/android-src` |
+| `repo sync` | **in progress** (cloud only; nothing checked out to the Mac) |
+| `run-aosp-build-job.sh` | still requires `hostname=lima-pw3` and `/srv/aosp-x86`; **not bypassed**; no compile completed |
+| Artifacts | no Voyage `system.img`; status = **prep / syncing**, not compiled, not bootable |
+
+## Gates
+
+`installable` / `identity_ready` / `device_confirmed` stay false. They stay closed without a reliable `bootmode=main` reading, a Voyage image, owner-confirmed free space, and an explicit first-boot authorization.

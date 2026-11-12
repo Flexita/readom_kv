@@ -6,7 +6,25 @@
     "member_sha256": "fa89453deb9947700cbebde2e840230e69969549be2116a0a72331ac5d2fe6c9",
     "defconfig": "imx60_wario_defconfig",
     "firmware": "5.16.2.1.1",
-    "kernel_version": "3.0.35"
+    "kernel_version": "3.0.35",
+    "role": "Historical Paperwhite 3 GPL input. Not the Voyage release kernel."
+  },
+  "voyage_kernel": {
+    "publisher": "Amazon",
+    "model": "Kindle Voyage (7th generation)",
+    "firmware": "5.13.6",
+    "source_url": "https://kindledownloads.s3.amazonaws.com/Kindle_src_5.13.6_3731990038.tar.gz",
+    "archive_sha256": "4a01245d1bf8724da428dd044bd0e2f6cae0687446b3a2c909dc21a7acc2222f",
+    "archive_bytes": 332761879,
+    "member": "gplrelease/linux-3.0.35.tar.gz",
+    "member_sha256": "a66a58b80869c65aedd5e1bb5b49a5f064731fab4997c5294c400570245144b0",
+    "member_bytes": 121872729,
+    "defconfig": "imx60_wario_defconfig",
+    "kernel_version": "3.0.35",
+    "firmware_url": "https://s3.amazonaws.com/firmwaredownloads/update_kindle_voyage_5.13.6.bin",
+    "firmware_sha256": "80856a112393a5a8c18ed66752193f5702abb2d9476a2d8657082bb11f7a155b",
+    "firmware_bytes": 247461749,
+    "role": "Voyage GPL input. The official update.bin was hashed and not unpacked: it has no plaintext uname or eips. Patch application is recorded in boot/profiles/voyage-5.13.6.json. Not a device boot."
   },
   "cross_compiler": {
     "publisher": "AOSP",

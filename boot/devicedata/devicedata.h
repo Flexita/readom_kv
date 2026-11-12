@@ -40,8 +40,13 @@ struct dd_profile {
      * (tools/tests/test_profile_matches_devicedata.py). */
     const char *kernel_release;  /* uname -r, and what /proc/version names */
     const char *kernel_version;  /* uname -v: the build number, date and time */
+    /* 0: this profile has no measured identity. Matching must fail closed
+     * before any string compare, so an empty record cannot be satisfied by
+     * a different device and a Paperwhite record cannot stand in for it. */
+    int identity_ready;
 };
 extern const struct dd_profile dd_pw3_5_16_2_1_1;
+extern const struct dd_profile dd_voyage_5_13_6;
 
 /* What the build fixes. */
 struct dd_build {
@@ -55,7 +60,7 @@ struct dd_build {
  * model on one firmware, and the running system is not it. The caller shows a
  * different screen for that, because telling someone with another Kindle to
  * restart and try again is telling them to do it for ever. */
-struct dd_why { char text[160]; int other_device; };
+struct dd_why { char text[160]; int other_device; int blocked; };
 
 /* Whether the running system is the model and firmware this build is for.
  * Cheap and side-effect free, for asking before anything is installed. */

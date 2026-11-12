@@ -404,6 +404,7 @@ PRODUCT_PROPERTY_OVERRIDES += \
     debug.sf.no_hw_vsync=0 \
     debug.sf.nobootanimation=1
 PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/rootdir/pw3-storage-floor.sh:system/bin/pw3-storage-floor.sh \
     frameworks/native/data/etc/android.hardware.touchscreen.xml:system/etc/permissions/android.hardware.touchscreen.xml \
     $(LOCAL_PATH)/input/max77696-onkey.kl:system/usr/keylayout/max77696-onkey.kl \
     $(LOCAL_PATH)/input/cyttsp4_mt.idc:system/usr/idc/cyttsp4_mt.idc

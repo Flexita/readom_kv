@@ -6,8 +6,8 @@
 
 | Requirement | Where to check |
 |---|---|
-| Kindle Paperwhite 3 (7th generation, 2015) | Settings → Device Options → Device Info |
-| Software version 5.16.2.1.1 | Same place. On an older version, see "If the software version is older" below |
+| Kindle Voyage (7th generation) | Settings → Device Options → Device Info. The Paperwhite 3 is no longer this tree's install target |
+| Firmware identity written into `boot/profiles/voyage-5.13.6.json` with `installable` true | It is not. The newest firmware known for the model is 5.13.6, and the version string, eips, partition map and RAM layout have not been read from a device, so **do not install** |
 | Jailbroken, **with a library that can show and run `.sh` scriptlets** (the jailbreak brought sh_integration) | How to confirm it is under "Does the jailbreak include sh_integration?" below; not jailbroken yet, or scriptlets do not work, see "The jailbreak side". Jailbreaking is not part of this project; weigh the risk yourself |
 
 On any other model or version the installer shows E101 and stops without changing any file.
@@ -39,7 +39,7 @@ This project neither carries nor bundles any jailbreak, and does not judge which
 ## What you need
 
 - A USB cable and a computer (Windows, macOS or Linux; it is only used to copy files).
-- At least **2.6 GB** of free space on the Kindle. (What the installer works out is 2.49 GB: a 512 MiB system image, 1.75 GiB of data space, and 64 MiB spare. If there is less, the screen says how many MB more are needed.)
+- At least **1600 MiB (1.6 GiB) free** on the Kindle user volume. This is an estimate: the system image is still 512 MiB (it was not rebuilt, so it cannot be pretended smaller), the data image is 1024 MiB, and 64 MiB is kept spare. The user volume is about 3 GB in total, not 3 GB free. If there is less, the screen says how many MB more are needed and no image is written.
 - Battery above 40 %, or a charger connected.
 - Wi‑Fi that can reach `github.com` or `readom.app`. The installer carries both addresses and tries them in that order, taking whichever answers. If neither does, download the offline package on the computer as well (see below). **In mainland China, start with the offline package**: both addresses are served from outside mainland China, and the download there can be very slow (see "Slow download" below).
 
@@ -83,7 +83,7 @@ First, what Readom touches: the installer and the entry write only the `android`
 
 - **Newer jailbreaks leave the old KUAL behind**. The script WinterBreak2 and WinterBreak run while jailbreaking treats a KUAL installed with MRPI as obsolete, and KindleModding says that KUAL is obsolete and does not work. The current way is [PEKI](https://github.com/KindleModding/PEKI)'s `KUAL.sh`, which is itself a scriptlet run by sh_integration.
 - **The signature "expired"**. The Kindle checks KUAL's signature against the developer keystore the jailbreak installed, which has a validity period; once the Kindle's clock is right, an old KUAL can be judged expired -- and connecting Wi-Fi to download Readom is what sets the clock right.
-- **Too little space**. With less than about 220 MB free, KUAL and MRPI can fail. The Kindle drive holds about 3 GB in all and Readom takes 2.49 GB, so what is left after the install can be less than that.
+- **Too little space**. With less than about 220 MB free, KUAL and MRPI can fail. The old Paperwhite budget took 2.49 GB of a drive of about 3 GB. The Voyage estimate takes 1600 MiB, which leaves more of that volume for books when the volume is nearly empty. It is still an estimate, and a volume that is already full of books can still fail the free-space check.
 
 Check in this order, and when reporting a problem, include the answer to each:
 
@@ -134,6 +134,7 @@ The screen shows an error code with an explanation in Chinese and English. It st
 | E102 | Battery below 40 % and not charging | Charge it, then tap again |
 | E103 | The previous installation is still running | Wait for it to finish |
 | E104 | The Kindle is still connected to a computer | Eject the Kindle drive, unplug the cable, and tap again. A charger is fine |
+| E105 | This build cannot be installed | The stock firmware identity has not been read from a device. No system image was written. Do not disable the check or reuse another model's parameters |
 | E201 | The download stopped | Check Wi‑Fi and tap again; what can be resumed is, and what cannot starts over. Or use the offline package |
 | E202 | A download is needed but Wi‑Fi is not connected | Connect Wi‑Fi and tap again, or copy the offline package into `documents` |
 | E203 | The download cannot be confirmed as safe | The likeliest reason is that the Kindle's date and time are wrong, so check those first in Settings; a certificate that does not verify gives the same code |

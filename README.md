@@ -32,7 +32,7 @@
 
 <br>
 
-<p align="center">演示、下载和图文安装教程都在官网：<b><a href="https://readom.app">readom.app</a></b><br>暂时只支持 Kindle Paperwhite 3（第 7 代），同时保留 Kindle 原厂系统。<a href="#其他机型">其他机型</a>要靠社区一起做。</p>
+<p align="center">演示、下载和图文安装教程都在官网：<b><a href="https://readom.app">readom.app</a></b><br>当前树的安装目标是 Kindle Voyage，而且<b>还不能安装</b>：原厂固件身份没有从真机采集，构建入口会拒绝打包。Paperwhite 3 的记录留着作历史对照，不再是可安装目标。原厂系统仍然保留。</p>
 
 <br>
 

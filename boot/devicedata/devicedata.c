@@ -22,6 +22,27 @@ const struct dd_profile dd_pw3_5_16_2_1_1 = {
     "/opt/ar6k/target/AR6003/hw2.1.1/bin/fw-4.bin",
     "3.0.35-lab126",
     "#8 PREEMPT Tue Aug 1 12:49:59 UTC 2023",
+    1,
+};
+
+/* Voyage 5.13.6, from a root read-only probe on 2026-11-12 (report SHA-256
+ * eab14ee928b2abaf6925d1fd2f04e461c1bc0525fef01a6cd5b9252b05864f15).
+ * /proc/version was:
+ *   Linux version 3.0.35-lab126 (builder@eink-builds) (gcc version 4.9.1 (GCC) )
+ *   #2 PREEMPT Thu Apr 8 09:39:57 UTC 2021
+ * The user FAT is the loop mount at /mnt/base-us. identity_ready stays 0:
+ * log_pos_goal and ip were redacted from the command line and are not guessed,
+ * the running kernel's machine id was not read, and the stock function bodies
+ * were not hashed. Wi-Fi file paths were not in the probe. Do not copy the
+ * Paperwhite record above into the empty strings. */
+const struct dd_profile dd_voyage_5_13_6 = {
+    "",
+    "/mnt/base-us",
+    "",
+    "",
+    "3.0.35-lab126",
+    "#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021",
+    0,
 };
 
 void dd_free(struct dd_buf *b) { free(b->data); b->data = NULL; b->size = b->cap = 0; }
@@ -190,6 +211,10 @@ static int ram_banks(const char *iomem, uint32_t start[16], uint32_t size[16], u
  * used, since the answer is read again there. */
 int dd_device_matches(const char *root, const struct dd_profile *profile, struct dd_why *why) {
     char live[1024], stock[1024] = "", *save = NULL;
+    if (!profile->identity_ready) {
+        why->blocked = 1;
+        return fail(why, "stock identity has not been measured; installation is refused");
+    }
     struct dd_buf cpu = {0};
     if (read_text(root, "/proc/cmdline", live, sizeof(live), why)) return -1;
     for (char *token = strtok_r(live, " ", &save); token; token = strtok_r(NULL, " ", &save)) {

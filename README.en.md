@@ -34,7 +34,7 @@
 
 <br>
 
-<p align="center">The demo, the download and an illustrated install guide are on the website: <b><a href="https://readom.app">readom.app</a></b><br>For now it runs on the Kindle Paperwhite 3 (7th generation) only, and the Kindle's own system stays. <a href="#other-models">Other models</a> depend on the community.</p>
+<p align="center">The demo, the download and an illustrated install guide are on the website: <b><a href="https://readom.app">readom.app</a></b><br>The install target of this tree is the Kindle Voyage, and <b>it cannot be installed yet</b>: the stock firmware identity has not been read from a device, and the entry build refuses to pack one. The Paperwhite 3 record remains as history and is no longer an installable target. The Kindle's own system stays.</p>
 
 <br>
 

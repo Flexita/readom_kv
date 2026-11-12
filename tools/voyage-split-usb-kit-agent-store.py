@@ -16,7 +16,9 @@ import stat
 from pathlib import Path
 
 MIB = 1024 * 1024
-PART = 48 * MIB  # under Agent Store 128MiB/file limit
+# Default 4 MiB: CopyFromBox on Mac has failed at 48 MiB; 4 MiB parts succeed
+# with the regular tool. Still well under the Agent Store 128 MiB/file limit.
+DEFAULT_PART = 4 * MIB
 
 
 def sha_file(path: Path) -> str:
@@ -34,7 +36,12 @@ def main():
     ap.add_argument('--output', type=Path, required=True)
     ap.add_argument('--entry-sh', type=Path,
                     help='optional replacement entry (new rebuild); keeps payload')
+    ap.add_argument('--part-bytes', type=int, default=DEFAULT_PART,
+                    help='volume size in bytes (default 4 MiB for CopyFromBox)')
     args = ap.parse_args()
+    if args.part_bytes < MIB or args.part_bytes >= 128 * MIB:
+        raise SystemExit('--part-bytes must be in [1MiB, 128MiB)')
+    part_size = args.part_bytes
 
     src = args.full_kit
     audit = json.loads((src / 'AUDIT-MANIFEST.json').read_text())
@@ -68,7 +75,7 @@ def main():
     with src_pay.open('rb') as inf:
         idx = 0
         while True:
-            chunk = inf.read(PART)
+            chunk = inf.read(part_size)
             if not chunk:
                 break
             part = out / 'VOLUMES' / ('%s.part%02d' % (pay_name, idx))
@@ -104,7 +111,7 @@ def main():
     split_meta = {
         'schema': 1,
         'kind': 'voyage-usb-offline-agent-store-split',
-        'part_bytes_max': PART,
+        'part_bytes_max': part_size,
         'entry': audit['entry'],
         'payload_system': audit['payload_system'],
         'fat_space_bytes': audit.get('fat_space_bytes'),

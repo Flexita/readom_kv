@@ -6,10 +6,11 @@ printk recapture (voyage-printk-recapture-v1) kept:
   pw3-init-check: real interfaces not ready: display=1 power_key=1 touch=0;
   framework remains stopped
 together with PreInit reaching "executing the original AOSP init" and storage
-check passing. Packaged system.img's /bin/pw3-init-check embeds only
-cyttsp4_mt; Voyage loads zforce2 (input name ZF_INPUT_NAME \"zforce2\").
-pw3-boot-report.rc reboots on sys.pw3.init_error=interfaces — matching the
-observed return to stock without claiming touch hardware behavior.
+check passing. Rebuilt system.img's /bin/pw3-init-check embeds both
+cyttsp4_mt and zforce2; Voyage loads zforce2 (ZF_INPUT_NAME \"zforce2\").
+Missing touch still fail-closes (interfaces → reboot). Host proves binary
+strings + source; real Voyage zforce2 probe and first framework ready are
+still device-side evidence.
 """
 from __future__ import annotations
 
@@ -23,21 +24,24 @@ BOOTREPORT = ROOT / 'device/amazon/pw3/initcheck/BootReport.cpp'
 BOOT_RC = ROOT / 'device/amazon/pw3/initcheck/pw3-boot-report.rc'
 VOYAGE_HW = ROOT / 'tools/kernel-hardware/init.voyage.hardware.rc'
 ZF_HDR = Path('/home/builder/pw3-build/linux-android-core/drivers/input/touchscreen/zforceint2.h')
-PACKED_INITCHECK = Path('/tmp/sys-audit/pw3-init-check')
-PACKED_BOOT_RC = Path('/tmp/sys-audit/pw3-boot-report.rc')
-PACKED_VOYAGE_HW = Path('/tmp/sys-audit/init.voyage.hardware.rc')
+PACKED_INITCHECK = Path('/tmp/sys-audit-zforce/pw3-init-check')
+PACKED_BOOTREPORT = Path('/tmp/sys-audit-zforce/pw3-boot-report')
+PACKED_BOOT_RC = Path('/tmp/sys-audit-zforce/pw3-boot-report.rc')
+PACKED_VOYAGE_HW = Path('/tmp/sys-audit-zforce/init.voyage.hardware.rc')
 SYSTEM_RAW = Path(
-    '/mnt/build-share/voyage-experimental-PRIVATE-export-preinitfix-20261112/system.raw.img')
+    '/mnt/build-share/voyage-experimental-PRIVATE-candidate-zforce-20261112/export/system.raw.img')
 
 
 def ensure_packed_extracts():
-    if PACKED_INITCHECK.is_file() and PACKED_BOOT_RC.is_file() and PACKED_VOYAGE_HW.is_file():
+    needed = (PACKED_INITCHECK, PACKED_BOOTREPORT, PACKED_BOOT_RC, PACKED_VOYAGE_HW)
+    if all(p.is_file() for p in needed):
         return
     if not SYSTEM_RAW.is_file():
         raise unittest.SkipTest('packed system.raw.img not on this host')
     PACKED_INITCHECK.parent.mkdir(parents=True, exist_ok=True)
     for src, dst in (
         ('/bin/pw3-init-check', PACKED_INITCHECK),
+        ('/bin/pw3-boot-report', PACKED_BOOTREPORT),
         ('/etc/init/pw3-boot-report.rc', PACKED_BOOT_RC),
         ('/vendor/etc/init/init.voyage.hardware.rc', PACKED_VOYAGE_HW),
     ):
@@ -78,11 +82,14 @@ class VoyageInitcheckTouch(unittest.TestCase):
         text = ZF_HDR.read_text(encoding='utf-8', errors='replace')
         self.assertIn('#define ZF_INPUT_NAME               "zforce2"', text)
 
-    def test_packed_initcheck_still_cyttsp_only_until_system_rebuild(self):
+    def test_packed_initcheck_and_bootreport_accept_zforce2(self):
         ensure_packed_extracts()
-        blob = PACKED_INITCHECK.read_bytes()
-        self.assertIn(b'cyttsp4_mt', blob)
-        self.assertNotIn(b'zforce2', blob)
+        init_blob = PACKED_INITCHECK.read_bytes()
+        self.assertIn(b'cyttsp4_mt', init_blob)
+        self.assertIn(b'zforce2', init_blob)
+        boot_blob = PACKED_BOOTREPORT.read_bytes()
+        self.assertIn(b'cyttsp4_mt', boot_blob)
+        self.assertIn(b'zforce2', boot_blob)
         rc = PACKED_BOOT_RC.read_text(encoding='utf-8')
         self.assertIn('on property:sys.pw3.init_error=interfaces', rc)
         self.assertIn('setprop sys.powerctl reboot,', rc)

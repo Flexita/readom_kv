@@ -62,9 +62,43 @@ class VoyageProfile(unittest.TestCase):
         forged['installable'] = True
         forged['identity_ready'] = True
         forged['device_confirmed'] = True
+        # Give bootmode=main so this case isolates the machine_id forgery.
+        forged['device_probe_extra']['bootmode'] = 'main'
         forged['measured']['machine_id'] = 4091
         found = self.mod.problems(forged, self.pw3)
         self.assertTrue(any('measured.machine_id must stay null' in i for i in found), found)
+
+    def test_empty_bootmode_blocks_opening_gates(self):
+        forged = json.loads(self.text)
+        forged['installable'] = True
+        forged['identity_ready'] = True
+        forged['device_confirmed'] = True
+        self.assertEqual(forged['device_probe_extra']['bootmode'], '')
+        found = self.mod.problems(forged, self.pw3)
+        self.assertTrue(
+            any('bootmode reading is empty' in i for i in found), found)
+        self.assertTrue(
+            any('root=mmcblk0p1 does not substitute' in i for i in found), found)
+
+    def test_root_partition_does_not_imply_bootmode_main(self):
+        """cmdline root=/dev/mmcblk0p1 is already measured; that is not bootmode."""
+        self.assertIn('root=/dev/mmcblk0p1', self.voyage['measured']['stock_cmdline'])
+        self.assertEqual(self.voyage['device_probe_extra']['bootmode'], '')
+        ready = json.loads(self.text)
+        ready['installable'] = True
+        ready['identity_ready'] = True
+        ready['device_confirmed'] = True
+        found = self.mod.problems(ready, self.pw3)
+        self.assertTrue(any('bootmode reading is empty' in i for i in found), found)
+
+    def test_bootmode_main_is_required_not_diags(self):
+        forged = json.loads(self.text)
+        forged['installable'] = True
+        forged['identity_ready'] = True
+        forged['device_confirmed'] = True
+        forged['device_probe_extra']['bootmode'] = 'diags'
+        found = self.mod.problems(forged, self.pw3)
+        self.assertTrue(any("bootmode reading is 'diags'" in i for i in found), found)
 
     def test_the_historical_pw3_profile_cannot_be_built_either(self):
         self.assertIs(self.pw3.get('installable'), False)
@@ -114,6 +148,7 @@ class VoyageProfile(unittest.TestCase):
         ready['installable'] = True
         ready['identity_ready'] = True
         ready['device_confirmed'] = True
+        ready['device_probe_extra']['bootmode'] = 'main'
         ready['measured'] = {
             'eips_sha256': 'a' * 64,
             'eips_bytes': 61104,
@@ -190,6 +225,7 @@ class VoyageProfile(unittest.TestCase):
         ready['installable'] = True
         ready['identity_ready'] = True
         ready['device_confirmed'] = True
+        ready['device_probe_extra']['bootmode'] = 'main'
         ready['machine'] = self.mod.SOURCE_SHARED_MACHINE_ID
         ready['source']['stock_machine_desc_nr'] = self.mod.SOURCE_SHARED_MACHINE_ID
         ready['measured'] = {
@@ -212,6 +248,7 @@ class VoyageProfile(unittest.TestCase):
         ready['installable'] = True
         ready['identity_ready'] = True
         ready['device_confirmed'] = True
+        ready['device_probe_extra']['bootmode'] = 'main'
         ready['machine'] = 4091
         ready['source']['stock_machine_desc_nr'] = 4091
         ready['measured'] = {

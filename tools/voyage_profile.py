@@ -89,6 +89,53 @@ def _voyage_machine_pin(profile):
     return found
 
 
+def _voyage_bootmode_evidence(profile):
+    """Return the recorded bootmode reading, or None if never collected.
+
+    Prefer measured.bootmode when present; otherwise device_probe_extra.bootmode
+    from the approved read-only probe. An empty string is a real reading of
+    empty — not missing evidence and not main.
+    """
+    measured = profile.get('measured') or {}
+    if 'bootmode' in measured:
+        return measured.get('bootmode')
+    extra = profile.get('device_probe_extra') or {}
+    if 'bootmode' in extra:
+        return extra.get('bootmode')
+    return None
+
+
+def _voyage_bootmode_gate(profile):
+    """dd_atags refuses anything other than main; packaging must match that.
+
+    root=/dev/mmcblk0p1 on a running Kindle only names the root block device.
+    It does not prove idme system_bootmode (published as /proc/bootmode) is
+    main. Opening installable / identity_ready / device_confirmed without a
+    recorded bootmode==main reading is refused here so flipping those flags
+    alone cannot pack an entry that will fail at handoff.
+    """
+    if profile.get('module_profile') != 3:
+        return []
+    opening = (
+        profile.get('installable') is True
+        or profile.get('identity_ready') is True
+        or profile.get('device_confirmed') is True
+    )
+    if not opening:
+        return []
+    mode = _voyage_bootmode_evidence(profile)
+    if mode == 'main':
+        return []
+    if mode == '':
+        return [
+            'bootmode reading is empty; dd_atags requires main '
+            '(root=mmcblk0p1 does not substitute)'
+        ]
+    if mode is None:
+        return ['bootmode has not been measured; dd_atags requires main']
+    return ['bootmode reading is %r, not main' % (mode,)]
+
+
 def problems(profile, pw3=None):
     """Why this profile must not be built into an entry someone can install."""
     if profile.get('module_profile') == 2:
@@ -111,6 +158,7 @@ def problems(profile, pw3=None):
     if isinstance(cmdline, str) and '[redacted]' in cmdline:
         found.append('measured.stock_cmdline contains a redacted value')
     found.extend(_voyage_machine_pin(profile))
+    found.extend(_voyage_bootmode_gate(profile))
     if pw3 is not None:
         found.extend(_copied_pw3_handoff(profile, pw3))
     return found

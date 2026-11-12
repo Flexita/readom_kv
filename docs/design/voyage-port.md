@@ -71,10 +71,28 @@ ATAG 协议本身不携带 ARM `MACH_TYPE`。该值在进内核时由 bootloader
 
 ## 首次启动的真实风险（不是填空）
 
-- **`/proc/bootmode` 为空**：`dd_atags` 要求恰好为 `main`，否则无法构造交接 ATAG。这是真实阻塞。`tools/voyage-probe-bootmode.sh` 只再读这一项；空串不得改成 `main`。
+### `/proc/bootmode` 为空，但 `root=/dev/mmcblk0p1` 且系统在跑——能证明什么
+
+| 事实 | 证明到 |
+|---|---|
+| cmdline `root=/dev/mmcblk0p1` | 当前根文件系统挂在 p1；与「主分区布局」一致 |
+| 设备正常 UI / root shell | 库存 Kindle 正在跑；**不是** diags 分区上的诊断系统的充分证明 |
+| `/proc/bootmode` 文件存在且内容为空 | `boardid.c` 从 idme `system_bootmode` 发布的字符串此时为空 |
+| 合起来 | **不能**推出 `bootmode == main` |
+
+代码语义（`boot/devicedata/devicedata.c` `dd_atags`）：读 `/proc/bootmode`，`strcmp(mode, "main")` 失败即拒绝；通过后写入 ATAG 的 bootmode 字面量仍是硬编码的 `"main"`。因此交接路径要的是**运行时**恰好为 `main` 的读数，不是 cmdline 里的 root=。
+
+`root=mmcblk0p1` **不能**替代。不要改 `/proc` 文件、不要把空串写成 `main`。已有最小只读脚本：`tools/voyage-probe-bootmode.sh`（只读这一项）。闸门：`voyage_profile._voyage_bootmode_gate` 在 `installable` / `identity_ready` / `device_confirmed` 任一为 true 时要求已记录的 bootmode 恰好为 `main`（空串 / diags / 未采都会拒绝），有失败测试。
+
+### 缺 `measured.machine_id` 如何挡住打包（诚实分层）
+
+- `measured.machine_id` **故意保持 null**；它**不在** `MEASURED_KEYS` 里。缺它**不会**单独触发 `measured.*. is empty`。
+- 真正挡住 `refuse_unless_installable` / 打包的是：`installable` / `identity_ready` / `device_confirmed` 仍为 false；以及打开这些旗标时还要过 bootmode=`main` 与型号/固件/函数体校验。
+- 运行时还有第二道：`dd_voyage_5_13_6.identity_ready == 0`（C 常量），`helper.c` 在安装准备阶段直接停；即使有人只改 JSON，交接仍会拒。
+
 - **Wi-Fi**：飞行模式下模块未加载；候选文件存在 ≠ 驱动路径。影响联网，不挡住 MACH_TYPE/函数体校验，但首次可用体验会缺网。
 - **用户区空闲 ~70 MiB**：安装峰值仍要 **1600 MiB**。不因此自动删除设备上的任何文件；清理须用户确认。
-- **尚无 Voyage 的 Android system.img**：见下一节。不能用旧 PW3 镜像冒充。
+- **尚无完成的 Voyage Android system.img**：见下一节。不能用旧 PW3 镜像冒充。编成功 ≠ 可启动。
 
 ## Android 镜像构建状态（云端实测）
 

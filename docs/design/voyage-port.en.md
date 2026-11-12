@@ -69,10 +69,28 @@ So `profile.machine = 4091` is a **source-proven build pin**, not a `/proc` read
 
 ## Real first-boot risks (not profile padding)
 
-- **Empty `/proc/bootmode`**: `dd_atags` requires exactly `main` or it will not build the handoff ATAG list. That is a real block. `tools/voyage-probe-bootmode.sh` re-reads only that field; an empty string must not become `main`.
-- **Wi-Fi**: modules were not loaded under airplane mode; candidate files ≠ driver path. That hurts connectivity after boot, not MACH_TYPE / function-body checks.
-- **~70 MiB free on the user store**: install peak stays **1600 MiB**. No automatic deletion of device files; cleanup needs the owner's confirmation.
-- **No Voyage Android `system.img` yet**: see below. A PW3 image must not stand in.
+### Empty `/proc/bootmode`, yet `root=/dev/mmcblk0p1` and a running UI — what that proves
+
+| Fact | Proves |
+|---|---|
+| cmdline `root=/dev/mmcblk0p1` | Root filesystem is on p1; consistent with the main partition layout |
+| Normal UI / root shell | Stock Kindle is running; **not** a sufficient proof of diags vs main bootmode |
+| `/proc/bootmode` exists and is empty | The string `boardid.c` publishes from idme `system_bootmode` is empty now |
+| Together | **Does not** imply `bootmode == main` |
+
+Code (`dd_atags`): reads `/proc/bootmode`, refuses unless `strcmp(mode, "main") == 0`, then still writes a hardcoded `"main"` into the ATAG. Handoff needs a **runtime** reading of exactly `main`, not the cmdline root=.
+
+`root=mmcblk0p1` is **not** a substitute. Do not rewrite `/proc`; do not invent `main`. Minimal probe: `tools/voyage-probe-bootmode.sh`. Gate: `voyage_profile._voyage_bootmode_gate` refuses opening `installable` / `identity_ready` / `device_confirmed` unless a recorded bootmode reading is exactly `main` (empty / diags / missing all fail), with failing tests.
+
+### How a null `measured.machine_id` blocks packaging (honest layering)
+
+- `measured.machine_id` **stays null on purpose**; it is **not** in `MEASURED_KEYS`. Its absence alone does **not** emit `measured.*. is empty`.
+- What actually blocks `refuse_unless_installable`: the three flags still false, plus the bootmode=`main` requirement when those flags are opened, plus model/firmware/function checks.
+- Runtime second line: `dd_voyage_5_13_6.identity_ready == 0`; `helper.c` stops at install prepare. Flipping JSON alone still fails handoff.
+
+- **Wi-Fi**: modules were not loaded under airplane mode; candidate files ≠ driver path.
+- **~70 MiB free on the user store**: install peak stays **1600 MiB**. No automatic deletion; cleanup needs the owner.
+- **No finished Voyage Android `system.img` yet**: see below. A PW3 image must not stand in. Compile success ≠ bootable.
 
 ## Android image build status (measured on this cloud host)
 

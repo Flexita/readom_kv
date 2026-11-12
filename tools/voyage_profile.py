@@ -137,15 +137,30 @@ def _voyage_bootmode_gate(profile):
 
 
 def problems(profile, pw3=None):
-    """Why this profile must not be built into an entry someone can install."""
+    """Why this profile must not be built into an entry someone can install.
+
+    experimental_first_test=true allows packaging an *experimental* entry when
+    installable and identity_ready are true and measured evidence is complete,
+    without claiming device_confirmed (no real Voyage Android boot yet). Daily
+    use / release still requires device_confirmed. Core model/firmware/function
+    checks stay required either way.
+    """
     if profile.get('module_profile') == 2:
         return []
     found = []
+    experimental = profile.get('experimental_first_test') is True
     if profile.get('installable') is not True:
         found.append('installable is not true')
     if profile.get('identity_ready') is not True:
         found.append('identity_ready is not true')
-    if profile.get('device_confirmed') is not True:
+    if experimental:
+        if not profile.get('experimental_label'):
+            found.append('experimental_first_test requires experimental_label')
+        if profile.get('device_confirmed') is True:
+            found.append(
+                'experimental_first_test must keep device_confirmed false '
+                '(do not claim a real Voyage Android boot)')
+    elif profile.get('device_confirmed') is not True:
         found.append('device_confirmed is not true')
     measured = profile.get('measured')
     if not isinstance(measured, dict):

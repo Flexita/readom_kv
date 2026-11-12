@@ -25,17 +25,19 @@ const struct dd_profile dd_pw3_5_16_2_1_1 = {
     1,
 };
 
-/* Voyage 5.13.6: nothing here was read off a device. identity_ready stays 0
- * so dd_device_matches refuses every machine, including one that looks like
- * the Paperwhite record above. Do not fill these strings from that record. */
+/* Voyage 5.13.6: filled from boot/profiles/voyage-5.13.6.json measured.*
+ * (2026-11-12 root probes). stock_cmdline is the measured line after the
+ * same root=/rootwait strip dd_device_matches applies. Wi-Fi paths are the
+ * ordinary stock files the extra probe sized under /opt/ar6k (not a confirmed
+ * loaded-driver path). Do not copy the Paperwhite uname or eips. */
 const struct dd_profile dd_voyage_5_13_6 = {
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    0,
+    "log_pos_goal=0x8fff0000 console=ttymxc0,115200 ro ip=off quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M",
+    "/mnt/base-us",
+    "/opt/ar6k/target/AR6003/hw2.1.1/bin/AR6003_wfo_calfile.bin",
+    "/opt/ar6k/target/AR6003/hw2.1.1/bin/fw-4.bin",
+    "3.0.35-lab126",
+    "#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021",
+    1,
 };
 
 void dd_free(struct dd_buf *b) { free(b->data); b->data = NULL; b->size = b->cap = 0; }

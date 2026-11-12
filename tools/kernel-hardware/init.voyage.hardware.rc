@@ -1,0 +1,23 @@
+# Voyage (icewine_wario) public modules. Evidence: CONFIG_TOUCHSCREEN_ZFORCE2=m,
+# CONFIG_KEYBOARD_FSR=m, zforce2.ko / fsr_keypad.ko in the Voyage android-core
+# modules.tar.gz; board registers Neonode zforce2 and FSR on icewine. cyttsp4
+# remains built in the kernel tree but is not loaded here — loading both on one
+# I2C bus without a device reading would be a guess. Not a device boot proof.
+# Per-device firmware must already be under /firmware/image with root-only DAC.
+
+on post-fs-data
+    insmod /vendor/lib/modules/drv26xx_haptics.ko
+    insmod /vendor/lib/modules/fsr_keypad.ko
+    insmod /vendor/lib/modules/zforce2.ko
+    insmod /vendor/lib/modules/cfg80211.ko
+    chown system system /sys/class/backlight/max77696-bl/brightness
+    chmod 0660 /sys/class/backlight/max77696-bl/brightness
+    chown system system /sys/class/backlight/max77696-bl/bl_power
+    chmod 0660 /sys/class/backlight/max77696-bl/bl_power
+
+# The Wi-Fi stack must request these states; no automatic radio-on at boot.
+on property:vendor.pw3.wifi.modules=load
+    insmod /vendor/lib/modules/ath6kl_sdio.ko board_data_file=ath6k/AR6003/hw2.1.1/board.bin suspend_mode=1 wow_mode=0 recovery_enable=1
+
+on property:vendor.pw3.wifi.modules=unload
+    rmmod ath6kl_sdio

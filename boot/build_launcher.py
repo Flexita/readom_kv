@@ -351,9 +351,11 @@ def main():
     # profile 1, so boot/handoff/tests/run_client_test.py -- the only test that
     # runs this helper and the launcher script on ARM, under the stock shell,
     # against a FAT disk -- could not be given anything to run.
-    if receipt['module_profile'] not in (1, 2):
+    if receipt['module_profile'] not in (1, 2, 3):
         sys.exit('unknown module profile: %r' % receipt['module_profile'])
     virtual = receipt['module_profile'] == 2
+    # Profile 3 is Voyage: same non-virtual device path as profile 1, with
+    # dd_voyage_5_13_6 / CHECK_PROFILE=3 compiled into the helper.
     if virtual and a.installer:
         sys.exit('a release entry installs a system image, which is the stock profile')
     if (sha(module) != receipt['modules_sha256']['pw3_first_kernel'] or sha(kernel) != receipt['kernel']['sha256'] or

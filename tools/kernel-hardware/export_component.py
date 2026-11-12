@@ -19,10 +19,7 @@ import tempfile
 HERE=Path(__file__).resolve().parent
 EXPECTED_RECEIPT='3bac300307b47c301b62cc1b83259965f5a66467ce49290ee9e307be004f7fce'
 SOURCE_SHA='fa89453deb9947700cbebde2e840230e69969549be2116a0a72331ac5d2fe6c9'
-MODULES={
- 'cyttsp4_core':'kernel/drivers/input/touchscreen/cyttsp4_core.ko',
- 'cyttsp4_i2c':'kernel/drivers/input/touchscreen/cyttsp4_i2c.ko',
- 'cyttsp4_mt_b':'kernel/drivers/input/touchscreen/cyttsp4_mt_b.ko',
+SHARED_MODULES={
  'cfg80211':'kernel/compat-wireless/net/wireless/cfg80211.ko',
  'ath6kl_sdio':'kernel/compat-wireless/drivers/net/wireless/ath/ath6kl/ath6kl_sdio.ko',
  'mxc_epdc_fb':'kernel/drivers/video/mxc/mxc_epdc_fb.ko',
@@ -30,23 +27,63 @@ MODULES={
  'arcotg_udc':'kernel/drivers/usb/gadget/arcotg_udc.ko',
  'g_android':'kernel/drivers/usb/gadget/g_android.ko',
 }
-CONFIG={'CONFIG_MODULES':'y','CONFIG_USB_GADGET':'m','CONFIG_USB_ARC':'m',
+# PW3 (celeste): Cypress cyttsp4. Voyage (icewine): Neonode zforce2 + FSR keys.
+# Do not install both touch stacks into one image's load path.
+PW3_TOUCH_MODULES={
+ 'cyttsp4_core':'kernel/drivers/input/touchscreen/cyttsp4_core.ko',
+ 'cyttsp4_i2c':'kernel/drivers/input/touchscreen/cyttsp4_i2c.ko',
+ 'cyttsp4_mt_b':'kernel/drivers/input/touchscreen/cyttsp4_mt_b.ko',
+}
+VOYAGE_TOUCH_MODULES={
+ 'drv26xx_haptics':'kernel/drivers/input/keyboard/drv26xx_haptics.ko',
+ 'fsr_keypad':'kernel/drivers/input/keyboard/fsr_keypad.ko',
+ 'zforce2':'kernel/drivers/input/touchscreen/zforce2.ko',
+}
+# Default MODULES keeps PW3 exporter/tests unchanged.
+MODULES={**PW3_TOUCH_MODULES, **SHARED_MODULES}
+SHARED_CONFIG={
+ 'CONFIG_MODULES':'y','CONFIG_USB_GADGET':'m','CONFIG_USB_ARC':'m',
  'CONFIG_USB_G_ANDROID':'m','CONFIG_USB_FUNCTIONFS':'n',
  'CONFIG_USB_OTG':'y','CONFIG_MXC_OTG':'m','CONFIG_USB_OTG_UTILS':'y',
  'CONFIG_USB_FSL_ARC_OTG':'y',
  'CONFIG_LAB126_ANDROID_ATH6KL_FIRMWARE':'y','CONFIG_LAB126_ANDROID_DISABLE_TOUCH_FW_UPDATE':'y',
- 'CONFIG_CYPRESS_CYTTSP4_BUS':'y','CONFIG_ATH6KL_SDIO':'m','CONFIG_CFG80211':'m',
- 'CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4':'m','CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_I2C':'m',
- 'CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_MT_B':'m','CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_LOADER':'n',
- 'CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_DEVICE_ACCESS':'n','CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_DEBUG_MODULE':'n',
- 'CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_INCLUDE_FW':'n','CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_AUTO_LOAD_TOUCH_PARAMS':'n',
+ 'CONFIG_ATH6KL_SDIO':'m','CONFIG_CFG80211':'m',
  'CONFIG_LAB126_ANDROID_EPDC':'y','CONFIG_LAB126':'y','CONFIG_MACH_MX6SL_WARIO':'y',
  'CONFIG_FB_MXC_EINK_PANEL':'m','CONFIG_FB_MXC_EINK_REAGL':'n','CONFIG_MXC_PXP_V2':'y',
  'CONFIG_DMA_ENGINE':'y','CONFIG_SPI':'y','CONFIG_SPI_IMX':'y','CONFIG_SPI_IMX_VER_2_3':'y',
  'CONFIG_FW_LOADER':'y','CONFIG_ZLIB_INFLATE':'y','CONFIG_MFD_MAX77696':'y','CONFIG_SENSORS_MAX77696':'y'}
+PW3_TOUCH_CONFIG={
+ 'CONFIG_CYPRESS_CYTTSP4_BUS':'y',
+ 'CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4':'m','CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_I2C':'m',
+ 'CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_MT_B':'m','CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_LOADER':'n',
+ 'CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_DEVICE_ACCESS':'n','CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_DEBUG_MODULE':'n',
+ 'CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_INCLUDE_FW':'n','CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_AUTO_LOAD_TOUCH_PARAMS':'n',
+}
+VOYAGE_TOUCH_CONFIG={
+ 'CONFIG_TOUCHSCREEN_ZFORCE2':'m','CONFIG_KEYBOARD_FSR':'m',
+}
+CONFIG={**SHARED_CONFIG, **PW3_TOUCH_CONFIG}
 RELOCS={2:'R_ARM_ABS32',28:'R_ARM_CALL',43:'R_ARM_MOVW_ABS_NC',44:'R_ARM_MOVT_ABS'}
 def sha(data): return hashlib.sha256(data).hexdigest()
 def fail(message): raise ValueError(message)
+
+def model_modules(model):
+    if model=='pw3': return {**PW3_TOUCH_MODULES, **SHARED_MODULES}
+    if model=='voyage': return {**VOYAGE_TOUCH_MODULES, **SHARED_MODULES}
+    fail('unknown hardware model: '+model)
+
+def model_config(model):
+    if model=='pw3': return {**SHARED_CONFIG, **PW3_TOUCH_CONFIG}
+    if model=='voyage': return {**SHARED_CONFIG, **VOYAGE_TOUCH_CONFIG}
+    fail('unknown hardware model: '+model)
+
+def model_hardware_rc(model):
+    return 'init.pw3.hardware.rc' if model=='pw3' else 'init.voyage.hardware.rc'
+
+def model_boot_order(model):
+    if model=='pw3':
+        return [['cyttsp4_core','cyttsp4_i2c','cyttsp4_mt_b','cfg80211'],['mxc_epdc_fb']]
+    return [['drv26xx_haptics','fsr_keypad','zforce2','cfg80211'],['mxc_epdc_fb']]
 
 def elf(data):
     if len(data)<52 or data[:6]!=b'\x7fELF\x01\x01': fail('Expected ELF32 little-endian module')
@@ -83,7 +120,8 @@ def elf(data):
             key,value=item.split(b'=',1);attrs.setdefault(key.decode(),[]).append(value.decode())
     return required,actual,attrs
 
-def checked_build(root,expected_receipt_sha256=EXPECTED_RECEIPT):
+def checked_build(root,expected_receipt_sha256=EXPECTED_RECEIPT,model='pw3'):
+    modules_map=model_modules(model); config_need=model_config(model)
     root=Path(root); receipt=(root/'build-result.json').read_bytes(); record=json.loads(receipt)
     if sha(receipt)!=expected_receipt_sha256: fail('Build receipt differs from the explicitly selected kernel build')
     if record.get('profile')!='android-core' or record.get('kcflags')!='-fno-pic -fno-pie' or \
@@ -99,7 +137,7 @@ def checked_build(root,expected_receipt_sha256=EXPECTED_RECEIPT):
         m=re.fullmatch(r'(CONFIG_\w+)=(.*)',line); n=re.fullmatch(r'# (CONFIG_\w+) is not set',line)
         if m: config[m[1]]=m[2]
         if n: config[n[1]]='n'
-    for name,value in CONFIG.items():
+    for name,value in config_need.items():
         if config.get(name,'n')!=value: fail('USB configuration mismatch: '+name)
     release=artifacts['kernel.release'].decode().strip()
     if not re.fullmatch(r'[A-Za-z0-9_.+\-]+',release): fail('Invalid kernel release')
@@ -118,11 +156,13 @@ def checked_build(root,expected_receipt_sha256=EXPECTED_RECEIPT):
             name,items=line.split(':',1)
             if name in deps: fail('Duplicate dependency entry')
             deps[name]=items.split()
-        expected={path:[] for path in MODULES.values()}
-        expected[MODULES['g_android']]=[MODULES['arcotg_udc']]
-        expected[MODULES['ath6kl_sdio']]=[MODULES['cfg80211']]
+        expected={path:[] for path in modules_map.values()}
+        expected[modules_map['g_android']]=[modules_map['arcotg_udc']]
+        expected[modules_map['ath6kl_sdio']]=[modules_map['cfg80211']]
+        if 'fsr_keypad' in modules_map:
+            expected[modules_map['fsr_keypad']]=[modules_map['drv26xx_haptics']]
         if any(deps.get(k)!=v for k,v in expected.items()): fail('Unreviewed USB ELF dependency graph')
-        modules={name:member(path) for name,path in MODULES.items()}
+        modules={name:member(path) for name,path in modules_map.items()}
     exports={}
     for line in artifacts['Module.symvers'].decode().splitlines():
         fields=line.split()
@@ -133,10 +173,15 @@ def checked_build(root,expected_receipt_sha256=EXPECTED_RECEIPT):
     for name,data in modules.items():
         required,relocs,attrs=elf(data)
         if len(attrs.get('vermagic',[]))!=1 or attrs['vermagic'][0].split()[0]!=release: fail('USB module vermagic mismatch')
-        if attrs.get('license')!=(['Dual BSD/GPL'] if name=='ath6kl_sdio' else ['GPL']): fail('Unexpected module license declaration')
-        providers={'vmlinux'}|{p.removeprefix('kernel/').removesuffix('.ko') for p in expected[MODULES[name]]}
+        lic=attrs.get('license')
+        if name=='ath6kl_sdio':
+            ok = lic==['Dual BSD/GPL']
+        else:
+            ok = lic in (['GPL'], ['GPL v2'])
+        if not ok: fail('Unexpected module license declaration')
+        providers={'vmlinux'}|{p.removeprefix('kernel/').removesuffix('.ko') for p in expected[modules_map[name]]}
         if any(exports.get(symbol) not in providers for symbol in required): fail('USB symbol missing or supplied outside module closure')
-        selected=[x for x in audit['modules'] if x['module']==MODULES[name].removeprefix('kernel/')]
+        selected=[x for x in audit['modules'] if x['module']==modules_map[name].removeprefix('kernel/')]
         if len(selected)!=1 or selected[0].get('unsupported')!=[] or set(selected[0].get('relocations',[]))!=relocs:
             fail('ARM relocation receipt does not match actual module')
         parameters={x.split(':',1)[0] for x in attrs.get('parm',[])}
@@ -144,13 +189,13 @@ def checked_build(root,expected_receipt_sha256=EXPECTED_RECEIPT):
         # its only parameters are composite.c's generic ones, which init never sets.
         if name=='g_android' and parameters!={'idVendor','idProduct','bcdDevice','iManufacturer','iProduct','iSerialNumber'}:
             fail('Compiled Android gadget parameter contract differs')
-        metadata[name]={'path':MODULES[name],'bytes':len(data),'sha256':sha(data),
+        metadata[name]={'path':modules_map[name],'bytes':len(data),'sha256':sha(data),
             'license':attrs['license'][0],'vermagic':attrs['vermagic'][0],
-            'undefined_symbols_checked':len(required),'relocations':sorted(relocs),'elf_dependencies':expected[MODULES[name]]}
+            'undefined_symbols_checked':len(required),'relocations':sorted(relocs),'elf_dependencies':expected[modules_map[name]]}
     # Refuse a build changed in place during this read.
     if (root/'build-result.json').read_bytes()!=receipt: fail('Build receipt changed during verification')
     proof={'receipt_sha256':sha(receipt),'patch_count':len(record.get('patches',{})),
-        'patches':record.get('patches',{}),'kernel_release':release,
+        'patches':record.get('patches',{}),'kernel_release':release,'model':model,
         'artifacts':{n:{'bytes':len(d),'sha256':sha(d)} for n,d in artifacts.items()},
         'source':record['source_lock']['kernel'],'cross_compiler':record['source_lock']['cross_compiler'],
         'modules':metadata}
@@ -160,16 +205,17 @@ def module_package(name):
     """The build module that installs /vendor/lib/modules/NAME.ko."""
     return 'pw3-kmod-'+name.replace('_','-')
 
-def export(build_dir,output,expected_receipt_sha256=EXPECTED_RECEIPT):
+def export(build_dir,output,expected_receipt_sha256=EXPECTED_RECEIPT,model='pw3'):
     output=Path(output).resolve()
     if output.exists(): fail('Output already exists')
-    modules,proof=checked_build(build_dir,expected_receipt_sha256)
+    modules,proof=checked_build(build_dir,expected_receipt_sha256,model=model)
+    hardware_rc=model_hardware_rc(model)
     output.parent.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.usb-stage-',dir=output.parent) as temp:
         stage=Path(temp)/'component';stage.mkdir()
         for name,data in modules.items():
             target=stage/'vendor/lib/modules'/(name+'.ko');target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(data)
-        for name in ('init.pw3.usb.modules.rc','init.pw3.hardware.rc','init.pw3.epdc.rc'):
+        for name in ('init.pw3.usb.modules.rc', hardware_rc, 'init.pw3.epdc.rc'):
             target=stage/'vendor/etc/init'/name;target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(HERE/name,target)
         shutil.copyfile(HERE/'ueventd.pw3.fragment.rc',stage/'vendor/etc/ueventd.pw3.fragment.rc')
         for directory in ('native','policy','userspace-patch'):
@@ -196,15 +242,17 @@ PRODUCT_COPY_FILES += \\
 '''+ ' \\\n'.join('    $(PW3_USB_COMPONENT_ROOT)/'+str(p.relative_to(stage))+':$(TARGET_COPY_OUT_VENDOR)/'+str(p.relative_to(stage/'vendor')) for p in copies)+'\n')
         (stage/'build-verification.json').write_text(json.dumps(proof,indent=2)+'\n')
         manifest={'schema':1,'private':False,'contains_private_firmware':False,'contains_keys':False,
-            'bootable_bundle':False,'device_runtime_verified':False,'build_receipt_sha256':proof['receipt_sha256'],
+            'bootable_bundle':False,'device_runtime_verified':False,'model':model,
+            'build_receipt_sha256':proof['receipt_sha256'],
             'usb_load_order':['fsl_otg_arc','arcotg_udc','g_android'],
-            'boot_order_groups':[['cyttsp4_core','cyttsp4_i2c','cyttsp4_mt_b','cfg80211'],['mxc_epdc_fb']],
+            'boot_order_groups':model_boot_order(model),
             'wifi_load':'ath6kl_sdio only when explicitly requested by wificond',
             'private_firmware_installation_required':['ath6k/AR6003/hw2.1.1/board.bin','ath6k/AR6003/hw2.1.1/fw-4.bin','epdc/pw3/waveform.pw3.gz'],
             'runtime_dependencies':[{'consumer':'arcotg_udc','provider':'fsl_otg_arc','reason':'otg_get_transceiver requires registered OTG platform driver'}],
             'usb_default':'every boot: MTP; adb only when Android turns it on (developer options), with authentication',
             'serial':'16 bytes from urandom once per device, hex encoded, kept in persist.pw3.usb.serial; no factory ID, not an authentication secret',
-            'not_proven':['MTP and adb through the Android gadget on the device','RSA pairing UI','USB suspend behavior'],
+            'not_proven':['MTP and adb through the Android gadget on the device','RSA pairing UI','USB suspend behavior',
+                          'Voyage zforce2/FSR input on hardware' if model=='voyage' else 'cyttsp4 on hardware'],
             'files':[{'path':str(p.relative_to(stage)),'bytes':p.stat().st_size,'sha256':sha(p.read_bytes())} for p in sorted(stage.rglob('*')) if p.is_file()]}
         (stage/'component-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
         stage.rename(output)
@@ -214,10 +262,12 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build-dir',required=True);parser.add_argument('--output',required=True)
     parser.add_argument('--expected-receipt-sha256',default=EXPECTED_RECEIPT)
+    parser.add_argument('--model',choices=('pw3','voyage'),default='pw3')
     args=parser.parse_args()
     try:
-        result=export(args.build_dir,args.output,args.expected_receipt_sha256)
-        print(json.dumps({'staged':True,'build_receipt_sha256':result['build_receipt_sha256'],'device_runtime_verified':False}))
+        result=export(args.build_dir,args.output,args.expected_receipt_sha256,model=args.model)
+        print(json.dumps({'staged':True,'build_receipt_sha256':result['build_receipt_sha256'],
+                          'device_runtime_verified':False,'model':args.model}))
     except (ValueError,OSError,KeyError,IndexError,UnicodeError,struct.error,tarfile.TarError) as error:
         print(json.dumps({'staged':False,'error':str(error) if isinstance(error,ValueError) else 'Unreadable or invalid build input'}))
         raise SystemExit(1)

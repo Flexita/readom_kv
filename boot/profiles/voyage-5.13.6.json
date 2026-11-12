@@ -1,13 +1,13 @@
 {
-  "description": "Kindle Voyage (7th generation), stock firmware 5.13.6. Root read-only probes and an offline unpack of the official update.bin filled the readings that were complete. MACH_TYPE 4091 is a source-proven build pin from the matching stock Image, not a /proc reading. measured.bootmode is main (dedicated probe 2026-11-12). A cloud experimental voyage-userdebug system.img exists (WITH_DEXPREOPT=false, display.id voyage-experimental-unverified) but is not a finished install package and is not a boot result. Still not installable: installable / identity_ready / device_confirmed stay false; free-space cleanup and first-boot authorization are not granted.",
-  "installable": false,
-  "identity_ready": false,
+  "description": "Kindle Voyage (7th generation), stock firmware 5.13.6. Measured identity is filled (bootmode=main, eips, uname, cmdline, partitions, stock_functions, MACH_TYPE 4091 build pin). experimental_first_test allows packaging an experimental entry only; device_confirmed stays false until a real Voyage Android boot. Not a daily-use / release claim.",
+  "installable": true,
+  "identity_ready": true,
   "device_confirmed": false,
   "module_profile": 3,
   "machine": 4091,
   "machine_why": "TARGET_MACHINE / transition r1. Offline: GPL mach-types mx6sl_wario=4091; imx60_wario_defconfig enables only CONFIG_MACH_MX6SL_WARIO; matching stock Image machine_desc.nr is 4091 next to name Freescale i.MX 6SoloLite based Wario Board (same Hardware string the device reported). ATAGs do not carry this number. measured.machine_id stays null.",
-  "supported_zh": "Kindle Voyage（第 7 代），固件 5.13.6。eips、uname、命令行、分区起点、四个原厂函数体、MACH_TYPE 4091（离线可证）和 bootmode=main（专用探针）已有证据。云端有 experimental voyage-userdebug system.img（非完整安装包、非启动证明）。仍不能安装：三旗标未开，空间清理与首次启动未授权。",
-  "supported_en": "Kindle Voyage (7th generation), firmware 5.13.6. eips, uname, the command line, partition starts, the four stock function bodies, MACH_TYPE 4091 (proven offline) and bootmode=main (dedicated probe) have evidence. A cloud experimental voyage-userdebug system.img exists (not a full install package, not a boot proof). Still not installable: the three flags stay closed; free-space cleanup / first boot are not authorized.",
+  "supported_zh": "Kindle Voyage（第 7 代），固件 5.13.6。已测身份可用于实验性首次测试打包；device_confirmed 仍为 false，不是日用/发行声明。",
+  "supported_en": "Kindle Voyage (7th generation), firmware 5.13.6. Measured identity may pack an experimental first-test entry; device_confirmed stays false — not a daily-use or release claim.",
   "measured": {
     "eips_sha256": "7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259",
     "eips_bytes": 61104,
@@ -225,5 +225,64 @@
     "script": "tools/voyage-probe-bootmode.sh",
     "privacy": "Owner-reviewed; no identity nodes or memory devices.",
     "note": "New runtime reading only. Does not explain the earlier empty extra-probe reading. Does not authorize installable, first boot, or space cleanup."
+  },
+  "experimental_first_test": true,
+  "experimental_label": "voyage-experimental-unverified-first-test",
+  "boot_ram_base": "0x80000000",
+  "identity_limit": "0xbf000000",
+  "identity_limit_why": "Same Wario 3G/1G TASK_SIZE bound as the shared board; not a Voyage-only invention.",
+  "cmdline_base": "log_pos_goal=0x8fff0000 console=ttymxc0,115200 ro ip=off quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M",
+  "cmdline_base_why": "measured.stock_cmdline after stripping root= and rootwait (matches dd_voyage_5_13_6.stock_cmdline / dd_device_matches).",
+  "stock_kernel_release": "3.0.35-lab126",
+  "stock_kernel_version": "#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021",
+  "stock_kernel_why": "Voyage 5.13.6 uname from the 2026-11-12 root probe; distinguishes this firmware from Paperwhite 5.16.2.1.1.",
+  "ram": [
+    [
+      "0x80000000",
+      "0x20000000"
+    ]
+  ],
+  "forbidden": [
+    [
+      "0x88000000",
+      "0x18000000"
+    ]
+  ],
+  "forbidden_why": "Shared 512 MiB Wario map: keep payload destinations in the low 128 MiB.",
+  "atag_kinds": [
+    "0x54410001",
+    "0x54410002",
+    "0x54410007",
+    "0x54410009",
+    "0x5441000b",
+    "0x5441000d",
+    "0x5441000f",
+    "0x54420005"
+  ],
+  "device_archive_max": 12582912,
+  "footprint_profile": "voyage",
+  "module_kernel_source": "/home/builder/pw3-build/linux-android-core",
+  "module_kernel_output": "/home/builder/pw3-build/out-android-core-voyage",
+  "stock_functions": {
+    "pm_test_show": {
+      "bytes": 124,
+      "sha256": "71025c707238a74117fc7a7065546f17efa057bb3084f17bdfe048d878543074",
+      "addr": "0xc01c0290"
+    },
+    "l2x0_flush_all": {
+      "bytes": 116,
+      "sha256": "5879a00e18ecd63fcb974d2a93a3d193092213037d2a10cb64a381a8f7350131",
+      "addr": "0xc01631a8"
+    },
+    "l2x0_disable": {
+      "bytes": 124,
+      "sha256": "2fb38c26df26f978137ab7e84c60f57af8ff41e25170af0a6dc09be17e0dd9f9",
+      "addr": "0xc0163590"
+    },
+    "l2x0_inv_all": {
+      "bytes": 152,
+      "sha256": "b38adb741635cfd2ddf38549cbf23c1d7246073b403528539335d72d2fe3368a",
+      "addr": "0xc016360c"
+    }
   }
 }

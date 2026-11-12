@@ -323,17 +323,40 @@ static void test_module_rules(void) {
     dd_free(&b);
 }
 
-static void test_voyage_refuses_before_compare(void) {
+#define VOYAGE_VERSION "#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021"
+
+static void test_voyage_identity_accepts_voyage_rejects_pw3(void) {
     struct dd_why why = {0};
-    CHECK(dd_voyage_5_13_6.identity_ready == 0);
-    CHECK(dd_voyage_5_13_6.stock_cmdline[0] == 0);
-    CHECK(dd_voyage_5_13_6.kernel_version[0] == 0);
+    char saved_ver[512], full[512];
+    size_t n;
+    FILE *f;
+
+    CHECK(dd_voyage_5_13_6.identity_ready == 1);
+    CHECK(dd_voyage_5_13_6.kernel_version[0] != 0);
     CHECK(dd_pw3_5_16_2_1_1.identity_ready == 1);
-    /* The fixture in `root` is a Paperwhite-shaped system. A Voyage profile
-     * with no measured identity must refuse it instead of matching. */
+    CHECK(strcmp(dd_voyage_5_13_6.kernel_version, dd_pw3_5_16_2_1_1.kernel_version) != 0);
+
+    /* Fixture is PW3-shaped (VERSION). Voyage must refuse it as another firmware. */
+    why.text[0] = 0; why.other_device = 0; why.blocked = 0;
     CHECK(dd_device_matches(root, &dd_voyage_5_13_6, &why) == -1);
-    CHECK(why.blocked == 1);
-    CHECK(strstr(why.text, "has not been measured") != NULL);
+    CHECK(why.other_device == 1);
+    CHECK(strstr(why.text, "stock kernel is not this firmware") != NULL);
+
+    /* Same fixture with Voyage uname must match the Voyage profile. */
+    snprintf(full, sizeof(full), "%s/proc/version", root);
+    f = fopen(full, "rb"); n = fread(saved_ver, 1, sizeof(saved_ver), f); fclose(f);
+    puts_("/proc/version",
+          "Linux version " RELEASE " (builder@eink-builds) (gcc version 4.9.1 (GCC) ) "
+          VOYAGE_VERSION "\n");
+    why.text[0] = 0; why.other_device = 0; why.blocked = 0;
+    CHECK(dd_device_matches(root, &dd_voyage_5_13_6, &why) == 0 && !why.text[0]);
+
+    /* And PW3 profile must refuse that Voyage uname. */
+    why.text[0] = 0; why.other_device = 0;
+    CHECK(dd_device_matches(root, &dd_pw3_5_16_2_1_1, &why) == -1);
+    CHECK(why.other_device == 1);
+
+    put("/proc/version", saved_ver, n);
 }
 
 int main(void) {
@@ -342,7 +365,7 @@ int main(void) {
     assert(mkdtemp(root));
     make_device();
     test_device_matches();
-    test_voyage_refuses_before_compare();
+    test_voyage_identity_accepts_voyage_rejects_pw3();
     test_atags();
     test_envelope_and_gzip();
     test_archive();

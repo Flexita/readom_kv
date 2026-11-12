@@ -31,7 +31,8 @@ PY
 stage=$(mktemp -d /home/builder/pw3-build/hardware-component.XXXXXX)
 trap 'rm -rf "$stage"' EXIT
 python3 /mnt/port/tools/kernel-hardware/export_component.py \
-  --build-dir "$BUILD" --expected-receipt-sha256 "$receipt" --output "$stage/component"
+  --build-dir "$BUILD" --expected-receipt-sha256 "$receipt" --model "$MODEL" \
+  --output "$stage/component"
 mkdir -p "$DEST"
 rsync -ac --no-times --delete "$stage/component/" "$DEST/"
 touch "$DEST/.pw3-owned-copy"

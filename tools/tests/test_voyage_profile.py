@@ -40,14 +40,24 @@ class VoyageProfile(unittest.TestCase):
         self.pw3 = self.mod.load(self.mod.PW3_PROFILE)
         self.text = self.mod.VOYAGE_PROFILE.read_text()
 
-    def test_the_committed_profile_cannot_be_built(self):
+    def test_the_committed_profile_packs_experimental_only(self):
+        """Measured identity + experimental_first_test may pack; not daily-use."""
+        self.assertIs(self.voyage['installable'], True)
+        self.assertIs(self.voyage['identity_ready'], True)
+        self.assertIs(self.voyage['device_confirmed'], False)
+        self.assertIs(self.voyage['experimental_first_test'], True)
         found = self.mod.problems(self.voyage, self.pw3)
-        self.assertIn('installable is not true', found)
-        self.assertIn('identity_ready is not true', found)
-        self.assertIn('device_confirmed is not true', found)
-        self.assertNotIn('measured.machine_id is empty', found)
-        with self.assertRaises(SystemExit):
-            self.mod.refuse_unless_installable(self.mod.VOYAGE_PROFILE)
+        self.assertEqual(found, [])
+        self.assertEqual(
+            self.mod.refuse_unless_installable(self.mod.VOYAGE_PROFILE)['experimental_label'],
+            'voyage-experimental-unverified-first-test')
+        # Claiming device_confirmed while experimental is refused.
+        forged = json.loads(self.text)
+        forged['device_confirmed'] = True
+        self.assertTrue(
+            any('must keep device_confirmed false' in i
+                for i in self.mod.problems(forged, self.pw3)),
+            self.mod.problems(forged, self.pw3))
 
     def test_machine_pin_is_source_proven_not_measured(self):
         self.assertEqual(self.voyage['machine'], 4091)
@@ -59,6 +69,7 @@ class VoyageProfile(unittest.TestCase):
 
     def test_inventing_a_measured_machine_id_is_refused(self):
         forged = json.loads(self.text)
+        forged['experimental_first_test'] = False
         forged['installable'] = True
         forged['identity_ready'] = True
         forged['device_confirmed'] = True
@@ -70,6 +81,7 @@ class VoyageProfile(unittest.TestCase):
 
     def test_empty_bootmode_blocks_opening_gates(self):
         forged = json.loads(self.text)
+        forged['experimental_first_test'] = False
         forged['installable'] = True
         forged['identity_ready'] = True
         forged['device_confirmed'] = True
@@ -87,6 +99,7 @@ class VoyageProfile(unittest.TestCase):
         self.assertIn('root=/dev/mmcblk0p1', self.voyage['measured']['stock_cmdline'])
         self.assertEqual(self.voyage['device_probe_extra']['bootmode'], '')
         ready = json.loads(self.text)
+        ready['experimental_first_test'] = False
         ready['installable'] = True
         ready['identity_ready'] = True
         ready['device_confirmed'] = True
@@ -96,6 +109,7 @@ class VoyageProfile(unittest.TestCase):
 
     def test_bootmode_main_is_required_not_diags(self):
         forged = json.loads(self.text)
+        forged['experimental_first_test'] = False
         forged['installable'] = True
         forged['identity_ready'] = True
         forged['device_confirmed'] = True
@@ -104,8 +118,8 @@ class VoyageProfile(unittest.TestCase):
         found = self.mod.problems(forged, self.pw3)
         self.assertTrue(any("bootmode reading is 'diags'" in i for i in found), found)
 
-    def test_bootmode_main_does_not_auto_open_installable(self):
-        """A verified main reading fills that gate only; flags stay closed."""
+    def test_bootmode_main_does_not_claim_device_confirmed(self):
+        """main + experimental packaging still leave device_confirmed false."""
         self.assertEqual(self.voyage['measured']['bootmode'], 'main')
         self.assertEqual(
             self.voyage['device_probe_bootmode']['sha256'],
@@ -113,13 +127,10 @@ class VoyageProfile(unittest.TestCase):
         self.assertEqual(self.voyage['device_probe_bootmode']['bytes'], 337)
         self.assertEqual(self.voyage['device_probe_bootmode']['bootmode'], 'main')
         self.assertEqual(self.voyage['device_probe_bootmode']['result'], 'ok')
-        self.assertIs(self.voyage['installable'], False)
-        self.assertIs(self.voyage['identity_ready'], False)
         self.assertIs(self.voyage['device_confirmed'], False)
+        self.assertIs(self.voyage['experimental_first_test'], True)
         found = self.mod.problems(self.voyage, self.pw3)
-        self.assertIn('installable is not true', found)
-        self.assertIn('identity_ready is not true', found)
-        self.assertIn('device_confirmed is not true', found)
+        self.assertEqual(found, [])
         self.assertFalse(any('bootmode' in i for i in found), found)
 
     def test_the_historical_pw3_profile_cannot_be_built_either(self):
@@ -131,14 +142,19 @@ class VoyageProfile(unittest.TestCase):
         self.assertEqual(self.mod.problems({'module_profile': 2}), [])
 
     def test_pw3_handoff_constants_are_not_in_the_voyage_profile(self):
+        """PW3-only readings must not appear; shared Wario cmdline may."""
         self.assertNotIn(self.mod.PW3_EIPS_SHA256, self.text)
         self.assertNotIn(self.pw3['stock_kernel_version'], self.text)
-        self.assertNotIn(self.pw3['cmdline_base'], self.text)
         for name, body in self.pw3['stock_functions'].items():
             self.assertNotIn(body['sha256'], self.text, name)
+        # Stripped cmdline matches both Wario boards; uname separates them.
+        self.assertEqual(self.voyage['cmdline_base'], self.pw3['cmdline_base'])
+        self.assertNotEqual(
+            self.voyage['stock_kernel_version'], self.pw3['stock_kernel_version'])
 
     def test_filling_the_blanks_with_the_pw3_record_still_refuses(self):
         forged = json.loads(self.text)
+        forged['experimental_first_test'] = False
         forged['installable'] = True
         forged['identity_ready'] = True
         forged['device_confirmed'] = True
@@ -148,6 +164,7 @@ class VoyageProfile(unittest.TestCase):
             'uname_release': self.pw3['stock_kernel_release'],
             'uname_version': self.pw3['stock_kernel_version'],
             'machine_id': None,
+            'bootmode': 'main',
             'stock_cmdline': self.pw3['cmdline_base'],
             'ram': self.pw3['ram'],
             'partition_table': {'copied': True},
@@ -237,17 +254,18 @@ class VoyageProfile(unittest.TestCase):
         self.assertEqual(
             self.voyage['source']['stock_image_sha256'],
             'bb15c17193f8a3b8dba3d27433fd7e6322ac013defcbff5c950ceee703f76530')
-        self.assertIs(self.voyage['installable'], False)
-        self.assertIs(self.voyage['identity_ready'], False)
         self.assertIs(self.voyage['device_confirmed'], False)
+        self.assertIs(self.voyage['experimental_first_test'], True)
 
     def test_source_verified_shared_values_are_not_refused(self):
         """4091 and 3.0.35-lab126 are in the Voyage GPL tree, not only on the PW3."""
         ready = json.loads(self.text)
+        ready['experimental_first_test'] = False
         ready['installable'] = True
         ready['identity_ready'] = True
         ready['device_confirmed'] = True
         ready['device_probe_extra']['bootmode'] = 'main'
+        ready['measured']['bootmode'] = 'main'
         ready['machine'] = self.mod.SOURCE_SHARED_MACHINE_ID
         ready['source']['stock_machine_desc_nr'] = self.mod.SOURCE_SHARED_MACHINE_ID
         ready['measured'] = {
@@ -267,6 +285,7 @@ class VoyageProfile(unittest.TestCase):
     def test_a_complete_reading_that_is_not_the_pw3_record_would_build(self):
         """The gate is fail-closed, not sealed: a real device reading can pass."""
         ready = json.loads(self.text)
+        ready['experimental_first_test'] = False
         ready['installable'] = True
         ready['identity_ready'] = True
         ready['device_confirmed'] = True
@@ -279,6 +298,7 @@ class VoyageProfile(unittest.TestCase):
             'uname_release': '3.0.35-lab126',
             'uname_version': '#1 PREEMPT Thu Jan 1 00:00:00 UTC 2015',
             'machine_id': None,
+            'bootmode': 'main',
             'stock_cmdline': 'console=ttymxc0,115200',
             'ram': [['0x80000000', '0x20000000']],
             'partition_table': {'read_from': '/proc/partitions on the device'},
@@ -286,14 +306,15 @@ class VoyageProfile(unittest.TestCase):
         }
         self.assertEqual(self.mod.problems(ready, self.pw3), [])
 
-    def test_filled_voyage_still_blocked_without_flags(self):
-        """Evidence can be complete while installable flags stay closed."""
-        found = self.mod.problems(self.voyage, self.pw3)
-        self.assertIn('installable is not true', found)
-        self.assertIn('identity_ready is not true', found)
+    def test_without_experimental_device_confirmed_still_required(self):
+        """Dropping experimental_first_test restores the daily-use device_confirmed gate."""
+        forged = json.loads(self.text)
+        forged['experimental_first_test'] = False
+        forged.pop('experimental_label', None)
+        forged['device_confirmed'] = False
+        found = self.mod.problems(forged, self.pw3)
+        self.assertIn('device_confirmed is not true', found)
         self.assertNotIn('measured.stock_cmdline is empty', found)
-        self.assertNotIn('measured.stock_functions is empty', found)
-        self.assertNotIn('measured.stock_cmdline contains a redacted value', found)
         self.assertNotIn('machine is not the Voyage Wario MACH_TYPE 4091', found)
 
 

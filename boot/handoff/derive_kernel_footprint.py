@@ -24,11 +24,22 @@ def elf_sections(p):
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--output',type=Path,required=True)
-    ap.add_argument('--profile',choices=['pw3','vexpress'],default='pw3');a=ap.parse_args()
+    ap.add_argument('--profile',choices=['pw3','voyage','vexpress'],default='pw3');a=ap.parse_args()
     require(platform.node()=='lima-pw3' and os.geteuid()!=0,'Use project VM builder')
-    virtual=a.profile=='vexpress';flavor='loader-stage' if virtual else 'android-core'
-    out=Path('/home/builder/pw3-build/out-'+flavor);source=Path('/home/builder/pw3-build/linux-'+flavor)
-    export=Path('/mnt/build-share/'+flavor+'-kernel');prefix='/home/builder/toolchains/aosp-arm-gcc49/bin/arm-linux-androideabi-'
+    virtual=a.profile=='vexpress'
+    if a.profile=='voyage':
+        out=Path('/home/builder/pw3-build/out-android-core-voyage')
+        source=Path('/home/builder/pw3-build/linux-android-core')
+        export=Path('/mnt/build-share/android-core-kernel-voyage')
+    elif virtual:
+        out=Path('/home/builder/pw3-build/out-loader-stage')
+        source=Path('/home/builder/pw3-build/linux-loader-stage')
+        export=Path('/mnt/build-share/loader-stage-kernel')
+    else:
+        out=Path('/home/builder/pw3-build/out-android-core')
+        source=Path('/home/builder/pw3-build/linux-android-core')
+        export=Path('/mnt/build-share/android-core-kernel')
+    prefix='/home/builder/toolchains/aosp-arm-gcc49/bin/arm-linux-androideabi-'
     base=0x60000000 if virtual else 0x80000000
     locked={'arch/arm/boot/compressed/head.S':'7cba08a3c830058b537183f9c7dd1def7e6a6c7939e96bb5bff32091188e0a52',
             'arch/arm/boot/compressed/vmlinux.lds.in':'ec0fec295f09aa3c12ab52d793344f275469b3d8a725423bf00233a881d82221'}

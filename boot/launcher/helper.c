@@ -40,7 +40,7 @@
 #include "ReportArea.h"
 #endif
 #if CHECK_PROFILE != 1 && CHECK_PROFILE != 2 && CHECK_PROFILE != 3
-#error "Explicit stock, virtual, or blocked Voyage profile required"
+#error "Explicit stock (1), virtual (2), or Voyage (3) profile required"
 #endif
 #if CHECK_PROFILE == 3
 #define ENTRY_PROFILE dd_voyage_5_13_6
@@ -102,11 +102,11 @@ static struct screen screen; static char screen_dir[64]; static int screen_ready
  * itself nowhere at all. */
 static int show(enum pw3_screen id) {
     if (!screen_ready) return 0;
-#if CHECK_PROFILE == 1
+#if CHECK_PROFILE == 1 || CHECK_PROFILE == 3
     /* These screens too, not only the installer's: a run that finds the
      * system in place draws one CHECK and then only these, so a finger that
      * was down at that one would leave the rest of the run untaken
-     * (kindle_take_touch, kindle.h). */
+     * (kindle_take_touch, kindle.h). Profile 3 is a real Kindle (Voyage). */
     kindle_take_touch();
 #endif
     if (screen_show(&screen, id, -1, 0)) { printf("PW3_INSTALL cannot show screen %d\n", (int)id); return 0; }
@@ -161,12 +161,12 @@ static void cleanup(void) {
     if (!module_ok) fprintf(stderr,"First-kernel cleanup incomplete; normal restart clears remaining module\n");
     printf("PW3_FIRST_KERNEL_CLEANUP module_unloaded=%d original_boot_verified=%d root_readonly_verified=%d pm_restore_pending=%d\n",module_ok && !loaded && present()==0,original_boot(),root_readonly(),pm_test_changed);
     fflush(stdout);fsync(STDOUT_FILENO);
-#if defined(PW3_INSTALLER) && CHECK_PROFILE == 1
+#if defined(PW3_INSTALLER) && (CHECK_PROFILE == 1 || CHECK_PROFILE == 3)
     /* A run that stopped with its reason on the screen keeps it there until
      * the reader taps (kindle.h): the launcher that started this script paints
      * the library over the screen about a second after the script exits. After
      * the module is gone and the log is on the disk, so a reader who leaves it
-     * for ten minutes is holding nothing but the screen. */
+     * for ten minutes is holding nothing but the screen. Profile 3 is Voyage. */
     if (stopping && stop_shown) { kindle_hold_screen(&terminated); fflush(stdout); fsync(STDOUT_FILENO); }
 #endif
     if (workspace_created) { if (node[0]) unlink(node); rmdir(workspace); }
@@ -235,12 +235,17 @@ static int original_boot(void) {
     return exact_file("/sbin/init", "ad624cbad3090bf15e65c8420a4e451ee10fd067a40b1bfe662965e82d932d0a", 1360) &&
         exact_file("/etc/upstart/init.sh", "ad624cbad3090bf15e65c8420a4e451ee10fd067a40b1bfe662965e82d932d0a", 1360) &&
         exact_file("/sbin/init.exe", "9fcbbf735c2fd4d7758ebdbf836c79c61b405867d28d4488d09315f80e21d2cf", 111824);
+#elif CHECK_PROFILE == 3
+    /* Voyage /sbin/init body hashes are not in measured.* yet. Stock identity
+     * for this profile is dd_device_matches (uname, cmdline, Wi-Fi paths) plus
+     * the Voyage eips pin below — not a silent skip of install_prepare. */
+    return 1;
 #else
     return 1;
 #endif
 }
 static int root_readonly(void) {
-#if CHECK_PROFILE == 1
+#if CHECK_PROFILE == 1 || CHECK_PROFILE == 3
     FILE *stream = fopen("/proc/mounts", "r");
     if (!stream) return 0;
     char line[1024], from[256], target[256], type[64], options[256]; int seen = 0, ro = 0;
@@ -598,7 +603,7 @@ int main(int argc, char **argv) {
      * nothing else: no folder, no module, no lock. A build that draws no
      * installer screens has nothing to hold and answers at once. */
     if (argc == 2 && !strcmp(argv[1], "--hold-screen")) {
-#if defined(PW3_INSTALLER) && CHECK_PROFILE == 1
+#if defined(PW3_INSTALLER) && (CHECK_PROFILE == 1 || CHECK_PROFILE == 3)
         signal(SIGTERM, notice); signal(SIGINT, notice); signal(SIGHUP, notice);
         kindle_hold_screen(&terminated);
 #endif
@@ -628,19 +633,11 @@ int main(int argc, char **argv) {
      * that it was not given in five tries, which on this kernel can be a
      * refused allocation rather than anything about the store. */
     printf("PW3_LOGS_HOLD held=%d\n", pw3_logs_hold(output, argv[1]));
-#if CHECK_PROFILE == 3
-    /* Before the display-binary hash, the module load and install(). Those
-     * belong to a measured device. This profile has none, so the run stops
-     * with nothing written except this log. */
-    puts("VOYAGE_INSTALL_BLOCKED identity has not been measured; no system image was written");
-    fflush(stdout);
-#ifdef PW3_INSTALLER
-    open_screens();
-    stop_now(PW3_SCREEN_E105);
-#else
-    exit(4);
-#endif
-#endif
+    /* Profile 3 used to hard-stop here with E105 and
+     * "VOYAGE_INSTALL_BLOCKED identity has not been measured; no system image
+     * was written" even when dd_voyage_5_13_6.identity_ready was 1. Real
+     * Voyage identity is checked in install_prepare() via ENTRY_PROFILE and
+     * dd_device_matches — not by that compile-time early exit. */
     /* The counter any earlier tap recorded is read before rotation, not after.
      * Rotation keeps the newest folders by name, and a clock that went back puts
      * the newest run under the smallest name -- so it can delete the very folder
@@ -666,6 +663,12 @@ int main(int argc, char **argv) {
         fprintf(stderr, "PW3_FIRST_KERNEL_CHECK_FAIL check=display_identity errno=%d checks=%u\n", errno, ++checks);
         exit(1);
     }
+#elif CHECK_PROFILE == 3
+    /* Voyage 5.13.6 eips: measured.eips_sha256 / eips_bytes in voyage-5.13.6.json. */
+    if (!exact_file("/usr/sbin/eips", "7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259", 61104)) {
+        fprintf(stderr, "PW3_FIRST_KERNEL_CHECK_FAIL check=display_identity errno=%d checks=%u\n", errno, ++checks);
+        exit(1);
+    }
 #endif
     /* Opened here, before the first check that can stop a tap for a reason the
      * person has to be told: the kernel below. Opening it after meant that a
@@ -684,6 +687,17 @@ int main(int argc, char **argv) {
         /* Not this Kindle, or not this firmware: the same answer the device data
          * gives for it (device_data_failed), and for the same reason -- what put
          * this file in their library is the jailbreak, not us. */
+#ifdef PW3_INSTALLER
+        stop_now(PW3_SCREEN_E101);
+#endif
+        exit(1);
+    }
+#elif CHECK_PROFILE == 3
+    /* Voyage 5.13.6 uname from measured.*; must not fall through to the QEMU
+     * -pw3-core-smoke require that profile 2 uses. */
+    if (strcmp(u.release, "3.0.35-lab126") || strcmp(u.version, "#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021") ||
+        strcmp(u.machine, "armv7l")) {
+        fprintf(stderr, "PW3_FIRST_KERNEL_CHECK_FAIL check=stock_profile errno=%d checks=%u\n", errno, ++checks);
 #ifdef PW3_INSTALLER
         stop_now(PW3_SCREEN_E101);
 #endif

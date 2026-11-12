@@ -48,7 +48,7 @@ class VoyageOfflineUsb(unittest.TestCase):
         data = 1024 * MIB
         reserve = 64 * MIB
         payload = 156484472  # experimental-0 compressed system from cloud build
-        entry = 7820425
+        entry = 7850180  # VoyageExperimental-offline.sh after E105 hard-block removal
         copy_set = entry + payload
         free_after = system + data - payload + reserve
         free_before = free_after + copy_set
@@ -57,6 +57,21 @@ class VoyageOfflineUsb(unittest.TestCase):
         self.assertLess(payload, data)
         # After copy, installer peak credit is system+data-payload+reserve.
         self.assertEqual(free_after, system + data - payload + reserve)
+
+    def test_rebuilt_offline_helper_lacks_hard_block_string(self):
+        # Optional host path: covers the real entry→helper binary, not JSON.
+        helper = Path('/mnt/build-share/voyage-experimental-PRIVATE-offline-entry-e105fix-20261112/launcher/helper')
+        if not helper.is_file():
+            self.skipTest('rebuilt Voyage helper not present on this host')
+        data = helper.read_bytes()
+        self.assertNotIn(b'no system image was written', data)
+        self.assertIn(b'VOYAGE_INSTALL_BLOCKED identity has not been measured', data)
+        self.assertIn(b'#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021', data)
+        self.assertIn(b'7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259', data)
+        entry = helper.parent / 'VoyageExperimental-offline.sh'
+        self.assertTrue(entry.is_file())
+        # Entry embeds helper; the hard-block phrase must not ship in the kit entry.
+        self.assertNotIn(b'no system image was written', entry.read_bytes())
 
 
 if __name__ == '__main__':

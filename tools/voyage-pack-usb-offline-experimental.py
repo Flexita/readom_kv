@@ -240,8 +240,13 @@ def main():
     ]) + '\n')
 
     preflight = out / 'HOST-PREFLIGHT.sh'
+    # Dual layout: full kit has documents/<payload>; Agent Store split keeps
+    # the payload in VOLUMES/*.part* + META/SPLIT-MANIFEST.json. The old full-
+    # only preflight `test -f COPY-TO-KINDLE/documents/$PAY` exited 1 silently
+    # on split kits.
     preflight.write_text(r'''#!/bin/sh
 # Host-only structure/hash check for this kit. Does not access a Kindle.
+# Supports (a) full COPY-TO-KINDLE/documents payload and (b) VOLUMES split.
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 cd "$ROOT"
@@ -251,10 +256,18 @@ test -f SHA256SUMS
 ENTRY=$(python3 -c 'import json;print(json.load(open("AUDIT-MANIFEST.json"))["entry"]["name"])')
 PAY=$(python3 -c 'import json;print(json.load(open("AUDIT-MANIFEST.json"))["payload_system"]["name"])')
 test -f "COPY-TO-KINDLE/documents/$ENTRY"
-test -f "COPY-TO-KINDLE/documents/$PAY"
 test "$ENTRY" != "Readom.sh"
+if [ -f "COPY-TO-KINDLE/documents/$PAY" ]; then
+  LAYOUT=full
+elif [ -d VOLUMES ] && [ -f META/SPLIT-MANIFEST.json ]; then
+  LAYOUT=split
+else
+  echo "HOST-PREFLIGHT: missing payload (neither documents/$PAY nor VOLUMES+META)" >&2
+  exit 1
+fi
+export LAYOUT
 python3 - <<'PY'
-import hashlib, json
+import hashlib, json, os, sys
 from pathlib import Path
 root = Path('.')
 audit = json.loads((root/'AUDIT-MANIFEST.json').read_text())
@@ -268,12 +281,28 @@ def sha(p):
         for b in iter(lambda:f.read(1<<20), b''): h.update(b)
     return h.hexdigest()
 e = root/'COPY-TO-KINDLE/documents'/audit['entry']['name']
-p = root/'COPY-TO-KINDLE/documents'/audit['payload_system']['name']
 assert sha(e)==audit['entry']['sha256'], 'entry hash mismatch'
-assert sha(p)==audit['payload_system']['sha256'], 'payload hash mismatch'
 assert e.stat().st_size==audit['entry']['bytes']
-assert p.stat().st_size==audit['payload_system']['bytes']
-# SHA256SUMS covers every file except itself
+layout = os.environ['LAYOUT']
+pay_name = audit['payload_system']['name']
+if layout == 'full':
+    p = root/'COPY-TO-KINDLE/documents'/pay_name
+    assert sha(p)==audit['payload_system']['sha256'], 'payload hash mismatch'
+    assert p.stat().st_size==audit['payload_system']['bytes']
+else:
+    meta = json.loads((root/'META'/'SPLIT-MANIFEST.json').read_text())
+    assert meta['payload_system']['sha256']==audit['payload_system']['sha256']
+    assert meta['payload_system']['bytes']==audit['payload_system']['bytes']
+    assert meta['entry']['sha256']==audit['entry']['sha256']
+    parts = sorted((root/'VOLUMES').glob(pay_name + '.part*'))
+    assert parts, 'no VOLUMES parts for '+pay_name
+    h=hashlib.sha256(); total=0
+    for part in parts:
+        with open(part,'rb') as f:
+            for b in iter(lambda:f.read(1<<20), b''):
+                h.update(b); total += len(b)
+    assert h.hexdigest()==audit['payload_system']['sha256'], 'reassembled volume hash mismatch'
+    assert total==audit['payload_system']['bytes'], 'reassembled volume size mismatch'
 listed={}
 for line in (root/'SHA256SUMS').read_text().splitlines():
     if not line.strip(): continue
@@ -285,6 +314,7 @@ for path in sorted(root.rglob('*')):
     assert rel in listed, 'missing from SHA256SUMS: '+rel
     assert sha(path)==listed[rel], 'SHA256SUMS mismatch: '+rel
 print('HOST-PREFLIGHT: OK')
+print('layout', layout)
 print('free_before_copy_mib', audit['fat_space_bytes']['free_before_copy_mib'])
 print('free_after_copy_mib', audit['fat_space_bytes']['free_after_copy_mib'])
 PY

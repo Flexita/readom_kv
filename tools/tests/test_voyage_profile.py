@@ -74,6 +74,26 @@ class VoyageProfile(unittest.TestCase):
         self.assertEqual(source['patches_applied'], 85)
         self.assertEqual(source['patches_failed'], 0)
 
+    def test_source_verified_shared_values_are_not_refused(self):
+        """4091 and 3.0.35-lab126 are in the Voyage GPL tree, not only on the PW3."""
+        ready = json.loads(self.text)
+        ready['installable'] = True
+        ready['identity_ready'] = True
+        ready['device_confirmed'] = True
+        ready['measured'] = {
+            'eips_sha256': 'a' * 64,
+            'eips_bytes': 1,
+            'uname_release': self.mod.SOURCE_SHARED_KERNEL_RELEASE,
+            'uname_version': '#1 PREEMPT Thu Jan 1 00:00:00 UTC 2015',
+            'machine_id': self.mod.SOURCE_SHARED_MACHINE_ID,
+            'stock_cmdline': 'console=ttymxc0,115200 quiet',
+            'ram': self.pw3['ram'],
+            'partition_table': {'read_from': '/proc/partitions on the device'},
+            'stock_functions': {'pm_test_show': {'bytes': 4, 'sha256': 'b' * 64}},
+        }
+        self.assertEqual(ready['measured']['machine_id'], self.pw3['machine'])
+        self.assertEqual(self.mod.problems(ready, self.pw3), [])
+
     def test_a_complete_reading_that_is_not_the_pw3_record_would_build(self):
         """The gate is fail-closed, not sealed: a real device reading can pass."""
         ready = json.loads(self.text)

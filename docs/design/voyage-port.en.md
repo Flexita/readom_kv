@@ -18,13 +18,26 @@ Downloaded and hashed on 2026-11-12. The numbers live in `source-lock.json` unde
 
 The same day, `tools/apply-patch-series.py` applied all **85** patches under `patches/*.patch` and `patches/android-core/*.patch` to a fresh tree of this member, with **0** failures. `imx60_wario_defconfig` from that tree, plus `config/android-core.config` and a temporary Voyage fragment (`LOCALVERSION=-lab126-voyage-android81`, `ARCH_MMAP_RND_BITS=16`, `LAB126_ANDROID_ATH6KL_FIRMWARE=y`), then passed `merge-kconfig.py --check` with all **147** requested options present.
 
-`uImage` was not produced with this machine's `arm-linux-gnueabi-gcc` 13.3. The 3.0 tree has no `compiler-gcc13.h`. After a header that existed only in the temporary tree, the assembler stopped at `arch/arm/mm/proc-v7.S:445` (`junk at end of line, first unrecognized character is '#'`). The compiler this repository pins is AOSP gcc 4.9, which is not on this machine. The kernel patch series was not changed to appease gcc 13. That is an unfinished compile, not a device result.
+Host gcc 13.3 cannot build this 3.0 tree (`proc-v7.S` and `#`). The pinned AOSP gcc 4.9 was checked out instead, from `https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9` at `0390252b6bcc6217966ade31d07f8b12f6f78f89` (`git rev-parse` matches `revision` in `source-lock.json`). `git archive` of that commit does not hash to `archive_sha256`: that pin is an unpublished packing, so the git revision is the source that was verified. The kernel patch series was not changed.
+
+That compiler, `imx60_wario_defconfig` and the 147-option config produced a kernel. `include/generated/utsrelease.h` is `3.0.35-lab126-voyage-android81+`. The trailing `+` is because the patched tree is dirty relative to the git commit made before the patches, not a release name. The compile command passes `-msoft-float`. This is a compile, not a boot.
+
+| Artifact | SHA-256 |
+|---|---|
+| `zImage` | `bfc22d8738da550af66e378618083eaf7e24e579962dc4e6511c13fd42a1b735` |
+| `uImage` | `8fe014996a74ae8215fa0dbe20992175a5d154054baa62e75f4d2e41a068e89d` |
+
+The uImage load address is `0x80008000`. That is what this build wrote into the header, from this defconfig's `MX6SL_PHYS_OFFSET`, not a copy of the PW3 profile and not a `/proc/iomem` reading, so it stays out of `measured.ram`.
+
+The stock-side static libc was built the way `tools/build-test-libc.sh` specifies: musl 1.2.5 (archive SHA-256 `a9a118bb…c75e4`, matching `source-lock.json`) with `-mfloat-abi=soft`. `boot/handoff/sha256.c` was linked statically with it. The ELF flags are `Version5 EABI, soft-float ABI`, with no `INTERP`. Under `qemu-arm-static`, SHA-256 of the bytes `voyage` matches CPython on the host. This is not a full `Readom.sh`: that still needs the kernel, an initramfs and an AOSP image, which were not packed here.
 
 The official `update.bin` has no squashfs magic and no plaintext `Linux version` or `eips`. The `1f 8b` bytes at offset 30755 are not a gzip stream. uname, the eips hash and the partition table were not extracted. The signature was not stripped and no partition was written.
 
 ## Missing, so installation is refused
 
 Every key in `measured` is null: `eips_sha256`, `eips_bytes`, `uname_release`, `uname_version`, `machine_id`, `stock_cmdline`, `ram`, `partition_table`, `stock_functions`.
+
+The checker refuses the readings taken on the PW3: the eips hash, the `uname -v` build stamp, the command line and the kernel function bodies. Voyage's own `mach-types` numbers `mx6sl_wario` as 4091, and its defconfig sets `CONFIG_LOCALVERSION="-lab126"`, so a device reading of machine id 4091 or release `3.0.35-lab126` is not treated as a copy. A RAM map that happens to match is not refused either, because forbidding a true reading would invent a difference. `measured.ram` is still empty: the sources name two physical bases and they do not agree.
 
 `tools/voyage_profile.py` runs from `boot/build_entry.py`, from `boot/build_launcher.py` when building an installer, and from `boot/build_module.py`. If any required field is empty, or if a Voyage measurement repeats the Paperwhite 3 eips hash, uname string, command line or kernel-function record, the build exits. At run time `CHECK_PROFILE == 3` logs and stops on E105 before the module is loaded and before `install()`. `dd_voyage_5_13_6.identity_ready` is 0, so `dd_device_matches` returns before comparing strings.
 
@@ -34,7 +47,9 @@ The system image stays 512 MiB. The data image is 1024 MiB, format 2. With the 6
 
 ## What to read off a device, and nothing else
 
-Do not run `Readom.sh`, do not sign in, and do not copy a serial number, a MAC address or a Wi-Fi name. Strip those fields from the output before sending it back.
+Do not run `Readom.sh` and do not sign in. On the Kindle, run `tools/voyage-readonly-probe.sh` (read-only, prints to stdout). It drops Serial lines, MAC-shaped strings and 12-digit hex ids. Do not add `/proc/board_id` or a Wi-Fi name.
+
+The commands below are the same questions the script asks:
 
 ```sh
 uname -a

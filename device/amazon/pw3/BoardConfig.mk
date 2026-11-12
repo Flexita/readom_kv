@@ -56,12 +56,26 @@ BOARD_SYSTEMIMAGE_PARTITION_SIZE := 536870912
 # 3 GB volume leaves almost no room for the Kindle's own books.
 #
 # 1024 MiB stays above that 748.7 MiB one-book reading and is the smallest
-# power of two that does. Required free space becomes
-# 512 MiB system + 1024 MiB data + 64 MiB reserve = 1600 MiB. On a 3 GiB
-# volume that is empty, about 1.44 GiB remains for Kindle books. Neither the
-# 3 GiB figure nor the 748.7 MiB figure was measured on a Voyage. The system
-# image stays 512 MiB: the last built image used 452.9 MiB and this tree was
-# not rebuilt, so shrinking the system file would be a lie.
+# power of two that does. The installer's own check (install.c check_space)
+# is not this sum alone. With nothing already on the volume it asks for
+# max(payload + system, system + data) + 64 MiB. The payload is the compressed
+# system image and is deleted before the data image is written; zstd output
+# goes straight into system.img, with no second file on disk. While the
+# payload is smaller than the data image, the peak is
+# 512 + 1024 + 64 MiB = 1600 MiB. A larger payload would be counted. Bytes
+# already present (a partial download, a system image, a data image of this
+# format and size) are credited. A data image of another size, including the
+# old 1792 MiB one, is refused as E304 and is not treated as free space.
+# The 64 MiB is spare for the stock system, logs and report.bin. It is not a
+# second copy of system.img: a torn write is replaced on the next tap from
+# the payload, and the stock Kindle is what a failed Android returns to.
+# On a 3 GiB volume that is empty, about 1.44 GiB remains for Kindle books.
+# Neither the 3 GiB figure nor the 748.7 MiB figure was measured on a Voyage.
+# The system image stays 512 MiB: the last built image used 452.9 MiB and this
+# tree was not rebuilt, so shrinking the system file would be a lie.
+# Of the 1024 MiB, pw3-storage-floor.sh asks Android to treat the volume as
+# low at 128 MiB free so cache trimming starts before the image is full.
+# That line is in the source only until a system image is built.
 #
 # Format 2, not 1. An installer keeps a data image only of its own format and
 # size (E304). A 1792 MiB image from the historical PW3 entry is refused

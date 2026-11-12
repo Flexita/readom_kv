@@ -23,8 +23,23 @@ def load(path):
     return json.loads(Path(path).read_text())
 
 
+# Values the Voyage GPL member states on its own. A later device reading that
+# matches them is evidence, not a copied Paperwhite measurement, and must not
+# be rejected just because the PW3 profile contains the same number.
+# mach-types in the Voyage member names mx6sl_wario as 4091. Makefile says 3.0.35.
+SOURCE_SHARED_MACHINE_ID = 4091
+SOURCE_SHARED_KERNEL_RELEASE = '3.0.35-lab126'
+
+
 def _copied_pw3_handoff(profile, pw3):
-    """A Voyage profile that repeats the PW3 handoff record is not a port."""
+    """Reject a Voyage profile that pastes PW3-only device readings.
+
+    Machine id, the stock kernel release and a RAM map are not in this list.
+    Forbidding a value the Voyage sources already state, or a map a device
+    really reports, would force a fake difference. The readings that are
+    refused are the ones taken off the Paperwhite: its eips binary, its uname
+    build stamp, its command line and its kernel function bodies.
+    """
     if profile.get('module_profile') != 3:
         return []
     measured = profile.get('measured') or {}

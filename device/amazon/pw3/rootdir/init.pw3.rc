@@ -29,6 +29,9 @@ on early-init
 on property:sys.boot_completed=1
     write /sys/block/dm-1/queue/read_ahead_kb 32
     write /sys/block/dm-2/queue/read_ahead_kb 32
+    # 128 MiB floor on the 1024 MiB data image. See pw3-storage-floor.sh.
+    # Not exercised on a device: no system image has been built from this tree.
+    exec - system system -- /system/bin/sh /system/bin/pw3-storage-floor.sh
 
 # CPU frequency: ondemand once booted, with time waiting for flash counted as
 # busy (io_is_busy). The boot runs on performance (996 MHz throughout). Only at

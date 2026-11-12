@@ -205,7 +205,9 @@ sudo chroot /srv/aosp-x86 /usr/sbin/runuser -u builder -- /bin/bash -lc '
   # lima/QEMU ARM64 builds keep the default WITH_DEXPREOPT path.
   dexpreopt_make=()
   if [[ "$(uname -m)" == x86_64 ]]; then
+    export WITH_DEXPREOPT=false
     dexpreopt_make=(WITH_DEXPREOPT=false)
+    echo "amd64 host: WITH_DEXPREOPT=false (skip host dex2oat / boot.art MAP_FIXED)"
   fi
   # Before lunch: it reads the product makefiles, and pw3.mk needs the keys for a user build.
   if [[ -n "$3" ]]; then export PW3_RELEASE_KEY_DIR="$3"; fi

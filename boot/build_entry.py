@@ -97,20 +97,33 @@ def static_arm(path):
         sys.exit('not a static ARM executable: ' + str(path))
 
 
-def boot_programs(work):
-    """The restore program (PID 1 after the jump) and the state tool, against this kernel's UAPI headers."""
+def boot_programs(work, kernel_release):
+    """The restore program (PID 1 after the jump) and the state tool, against this kernel's UAPI headers.
+
+    kernel_release must be the android-core uname string from --kernel/kernel.release.
+    Hardcoding the PW3 LOCALVERSION made Voyage's handoff-init skip PMIC/EPDC restore
+    (RESULT skipped: unexpected kernel) and still hand_over into PreInit.
+    """
+    if not kernel_release or not re.fullmatch(r'[A-Za-z0-9._+-]+', kernel_release):
+        sys.exit('invalid kernel_release for handoff-init: %r' % (kernel_release,))
+    if '-android81' not in kernel_release:
+        sys.exit('kernel_release %r is not an android-core build (-android81)' % (kernel_release,))
     headers = work / 'uapi'
     (work / 'headers-build').mkdir()
     run(['make', '-s', '-C', str(KERNEL_SOURCE), 'O=' + str(work / 'headers-build'), 'ARCH=arm', 'headers_install',
          'INSTALL_HDR_PATH=' + str(headers)], stdout=subprocess.DEVNULL)
     flags = [MUSL, '-std=gnu11', '-static', '-Os', '-Wall', '-Wextra', '-Werror', '-isystem', str(headers / 'include'),
-             '-I', str(HERE / 'handoff-init')]
+             '-I', str(HERE / 'handoff-init'),
+             '-DKERNEL_RELEASE="%s"' % kernel_release]
     out = {}
     for name, source in [('pw3-handoff-init', HERE / 'handoff-init/pw3-handoff-init.c')]:
         run(flags + [str(source), '-o', str(work / (name + '.unstripped'))])
         run([TOOLS + 'strip', '-o', str(work / name), str(work / (name + '.unstripped'))])
         static_arm(work / name)
-        out[name] = (work / name).read_bytes()
+        blob = (work / name).read_bytes()
+        if kernel_release.encode() not in blob:
+            sys.exit('handoff-init binary missing KERNEL_RELEASE %r' % (kernel_release,))
+        out[name] = blob
     return out
 
 
@@ -173,7 +186,7 @@ def main():
     system_modules = sorted((work / 'modules').glob('*.ko'))
     if not system_modules or any(modules.get(m.name) != m.read_bytes() for m in system_modules):
         sys.exit('the system image carries kernel modules other than --kernel\'s')
-    programs = boot_programs(work)
+    programs = boot_programs(work, release)
 
     # The public initramfs: this build's ramdisk with the boot programs, the
     # EPDC module, and the storage entry's file-based mount table.
@@ -195,6 +208,17 @@ def main():
                          + pack.CURRENT_TESTFILE_CONTRACT.decode()
                          + '; it predates the three-key command line and the entry '
                            'it would build cannot boot. Build the export again.')
+    # Model-neutral android-core marker (see PreInit parse_config). An export
+    # still built against the old PW3-only strstr(..., "-pw3-android81") rejects
+    # every Voyage conf and reboots to stock before the report area is mapped.
+    # The old needle embeds as a NUL-terminated C string; the fixed binary has
+    # "-android81\0" and must not still carry "-pw3-android81\0".
+    if b'-pw3-android81\0' in storage.data:
+        raise SystemExit('the export\'s storage entry still embeds the PW3-only '
+                         'kernel_release needle -pw3-android81; rebuild pw3-testfile-init')
+    if b'-android81\0' not in storage.data:
+        raise SystemExit('the export\'s storage entry carries no -android81\\0 marker; '
+                         'rebuild pw3-testfile-init from PreInit.c')
     storage.name = 'pw3-testfile-init.real'    # run by the restore program
     entries += [pack.Entry('pw3-testfile-init', storage.mode, storage.uid, storage.gid, programs['pw3-handoff-init']),
                 pack.Entry('pw3-handoff', stat.S_IFDIR | 0o755),

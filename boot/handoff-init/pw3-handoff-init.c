@@ -52,7 +52,10 @@
 #include "cpu-probe.h"
 #include "start-picture.h"
 
-#ifndef KERNEL_RELEASE /* overridden only for the emulator self-test */
+#ifndef KERNEL_RELEASE
+/* build_entry.py passes -DKERNEL_RELEASE from --kernel/kernel.release so each
+ * model's android-core LOCALVERSION is matched. The PW3 default remains for
+ * host/emulator builds that do not go through build_entry. */
 #define KERNEL_RELEASE "3.0.35-lab126-pw3-android81"
 #endif
 #define REAL_ENTRY "/pw3-testfile-init.real"

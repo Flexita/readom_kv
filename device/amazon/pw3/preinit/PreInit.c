@@ -251,7 +251,12 @@ static bool parse_config(const char *path, struct config *cfg) {
         else if (!strcmp(line, "system_sha256")) { bit = 8U; if (!hex_sha(eq, cfg->system_sha)) return false; }
         else if (!strcmp(line, "init_sha256")) { bit = 16U; if (!hex_sha(eq, cfg->init_sha)) return false; }
         else if (!strcmp(line, "cmdline_sha256")) { bit = 32U; if (!hex_sha(eq, cfg->cmdline_sha)) return false; }
-        else if (!strcmp(line, "kernel_release")) { bit = 64U; if (!safe_release(eq) || strlen(eq) >= sizeof(cfg->release) || !strstr(eq, "-pw3-android81")) return false; strcpy(cfg->release, eq); }
+        /* Marker is the android-core LOCALVERSION suffix shared by every model
+         * fragment under config/models (…-android81), not the PW3-only
+         * "-pw3-android81". Voyage ships 3.0.35-lab126-voyage-android81; a
+         * PW3-only strstr sent that conf through stop() then RB_AUTOBOOT before
+         * report_node was mapped. */
+        else if (!strcmp(line, "kernel_release")) { bit = 64U; if (!safe_release(eq) || strlen(eq) >= sizeof(cfg->release) || !strstr(eq, "-android81")) return false; strcpy(cfg->release, eq); }
         else if (!strcmp(line, "fat_offset")) { bit = 128U; if (!decimal(eq, &cfg->offset) || cfg->offset % 512) return false; }
         else if (!strcmp(line, "fat_sizelimit")) { bit = 256U; if (!decimal(eq, &cfg->sizelimit) || cfg->sizelimit % 512) return false; }
         else if (!strcmp(line, "adb_key_sha256")) { bit = 512U; cfg->adb_key = strcmp(eq, "none") != 0; if (cfg->adb_key && !hex_sha(eq, cfg->adb_sha)) return false; }

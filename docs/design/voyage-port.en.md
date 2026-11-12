@@ -16,54 +16,51 @@ Downloaded and hashed on 2026-11-12. The numbers live in `source-lock.json` unde
 
 `arch/arm/plat-mxc/include/mach/memory.h` defines both `MX6SL_PHYS_OFFSET` (0x80000000) and, under `CONFIG_ARCH_MX6`, `MX6_PHYS_OFFSET` (0x10000000). `board-mx6sl_wario.c` uses the former for `boot_params`. The handoff adopts neither address.
 
-The same day, `tools/apply-patch-series.py` applied all **85** patches under `patches/*.patch` and `patches/android-core/*.patch` to a fresh tree of this member, with **0** failures. `imx60_wario_defconfig` from that tree, plus `config/android-core.config` and a temporary Voyage fragment (`LOCALVERSION=-lab126-voyage-android81`, `ARCH_MMAP_RND_BITS=16`, `LAB126_ANDROID_ATH6KL_FIRMWARE=y`), then passed `merge-kconfig.py --check` with all **147** requested options present.
+The same day, `tools/apply-patch-series.py` applied all **85** patches under `patches/*.patch` and `patches/android-core/*.patch` to a fresh tree of this member, with **0** failures. The kernel built with the pinned AOSP gcc 4.9 is named `3.0.35-lab126-voyage-android81+`. That is **not** the device's `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021`, so its function bodies are not a stand-in for the stock kernel.
 
-Host gcc 13.3 cannot build this 3.0 tree (`proc-v7.S` and `#`). The pinned AOSP gcc 4.9 was checked out instead, from `https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9` at `0390252b6bcc6217966ade31d07f8b12f6f78f89` (`git rev-parse` matches `revision` in `source-lock.json`). `git archive` of that commit does not hash to `archive_sha256`: that pin is an unpublished packing, so the git revision is the source that was verified. The kernel patch series was not changed.
+## Offline unpack of the official update package
 
-That compiler, `imx60_wario_defconfig` and the 147-option config produced a kernel. `include/generated/utsrelease.h` is `3.0.35-lab126-voyage-android81+`. The trailing `+` is because the patched tree is dirty relative to the git commit made before the patches, not a release name. The compile command passes `-msoft-float`. This is a compile, not a boot.
+Authorized offline format parsing of the public official Voyage 5.13.6 update package. The download SHA-256 is integrity of the downloaded file, **not** an RSA signature check. KindleTool `extract` unpacks SP01→FB03 Recovery V2 without `--unsigned`, without altering signatures, and without running extracted code.
 
 | Artifact | SHA-256 |
 |---|---|
-| `zImage` | `bfc22d8738da550af66e378618083eaf7e24e579962dc4e6511c13fd42a1b735` |
-| `uImage` | `8fe014996a74ae8215fa0dbe20992175a5d154054baa62e75f4d2e41a068e89d` |
+| `imx60_wario/uImage` | `add9b0a2…a9ca32` (IH_NAME `Linux-3.0.35-lab126`, load `0x80008000`) |
+| zImage inside the uImage | `934302ee…35e74e` |
+| Image inflated from the zImage piggy | `bb15c171…76530` |
 
-The uImage load address is `0x80008000`. That is what this build wrote into the header, from this defconfig's `MX6SL_PHYS_OFFSET`, not a copy of the PW3 profile and not a `/proc/iomem` reading, so it stays out of `measured.ram`.
+The Image contains the exact device banner: `Linux version 3.0.35-lab126 (builder@eink-builds) (gcc version 4.9.1 (GCC) ) #2 PREEMPT Thu Apr 8 09:39:57 UTC 2021`. The four symbols were recovered from kallsyms; each body is SHA-256 from the symbol through the next kallsyms address, and written into `measured.stock_functions`. The sizes match the PW3 record; the digests do not.
 
-The stock-side static libc was built the way `tools/build-test-libc.sh` specifies: musl 1.2.5 (archive SHA-256 `a9a118bb…c75e4`, matching `source-lock.json`) with `-mfloat-abi=soft`. `boot/handoff/sha256.c` was linked statically with it. The ELF flags are `Version5 EABI, soft-float ABI`, with no `INTERP`. Under `qemu-arm-static`, SHA-256 of the bytes `voyage` matches CPython on the host. This is not a full `Readom.sh`: that still needs the kernel, an initramfs and an AOSP image, which were not packed here.
+## Read-only device reports on 2026-11-12
 
-The official `update.bin` has no squashfs magic and no plaintext `Linux version` or `eips`. The `1f 8b` bytes at offset 30755 are not a gzip stream. uname, the eips hash and the partition table were not extracted. The signature was not stripped and no partition was written.
+The first report is 2195 bytes, SHA-256 `eab14ee9…4f15`, ending `VOYAGE_PROBE_DONE`, `uid=0`. The extra report is 1779 bytes, SHA-256 `47a04517…a4ed`, ending `VOYAGE_PROBE_EXTRA_DONE`, `result: partial`, `errors: 1` (empty `/proc/bootmode`).
 
-## Missing, so installation is refused
+Already written into `measured`:
 
-Every key in `measured` is null: `eips_sha256`, `eips_bytes`, `uname_release`, `uname_version`, `machine_id`, `stock_cmdline`, `ram`, `partition_table`, `stock_functions`.
+| Item | Reading |
+|---|---|
+| eips | 61104 bytes, `7916bee5…6259` |
+| uname | `3.0.35-lab126`, `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021` |
+| System RAM | `80000000-9fffffff` |
+| stock_cmdline | `rootwait log_pos_goal=0x8fff0000 console=ttymxc0,115200 root=/dev/mmcblk0p1 ro ip=off quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M` (differs from the PW3 `cmdline_base`: adds `rootwait` and `root=`) |
+| partition starts (512-byte sectors) | p1=65536, p2=987136, p3=1118208, p4=1249280; whole disk and boot nodes have no start by design |
+| user FAT loop | backing `/dev/mmcblk0p4`, offset 8192 |
+| stock_functions | as above, from the official Image that matches this uname |
 
-The checker refuses the readings taken on the PW3: the eips hash, the `uname -v` build stamp, the command line and the kernel function bodies. Voyage's own `mach-types` numbers `mx6sl_wario` as 4091, and its defconfig sets `CONFIG_LOCALVERSION="-lab126"`, so a device reading of machine id 4091 or release `3.0.35-lab126` is not treated as a copy. A RAM map that happens to match is not refused either, because forbidding a true reading would invent a difference. `measured.ram` is still empty: the sources name two physical bases and they do not agree.
+Not filled, and not guessed:
 
-`tools/voyage_profile.py` runs from `boot/build_entry.py`, from `boot/build_launcher.py` when building an installer, and from `boot/build_module.py`. If any required field is empty, or if a Voyage measurement repeats the Paperwhite 3 eips hash, uname string, command line or kernel-function record, the build exits. At run time `CHECK_PROFILE == 3` logs and stops on E105 before the module is loaded and before `install()`. `dd_voyage_5_13_6.identity_ready` is 0, so `dd_device_matches` returns before comparing strings.
+- `measured.machine_id` stays null. No ordinary proc file publishes only that number; `/proc/atags` also carries the board id and MAC, so it is not read. Source `4091` stays under `source` only.
+- `/proc/bootmode` read as an empty string. That is the extra report's only error and is **not** written as `main`.
+- Wi-Fi: under airplane mode, `ar6000` / `ath6kl*` were not loaded. Candidate ordinary files under `/opt/ar6k/...` exist with sizes; that is **not** a confirmed runtime driver path.
+- No reads of `/proc/kcore`, `/dev/mem`, boot partitions, or block devices opened to dig out a kernel. The public firmware already yielded a matching kernel, so no rootfs kernel-file probe script is produced.
 
-## Space (estimate)
+`tools/voyage_profile.py` still requires `installable`, `identity_ready`, `device_confirmed` and every `measured` key. A missing `machine_id` still exits the build. At runtime `CHECK_PROFILE == 3` stops at E105 before the module load and `install()`.
 
-The system image stays 512 MiB. The data image is 1024 MiB, format 2. With the 64 MiB reserve, an install needs **1600 MiB free**. The reason, and the fact that none of this was measured on a Voyage, is in `device/amazon/pw3/BoardConfig.mk`. The 512 MB heap settings were not changed: those numbers were measured on a PW3 of the same SoC family, and changing them without a new measurement is not an optimization.
+## Space
 
-## What to read off a device, and nothing else
+System image 512 MiB, data image 1024 MiB, format 2. Install peak free space stays **1600 MiB**. This report's user area had only about 70 MiB free; the floor is not lowered.
 
-Do not run `Readom.sh` and do not sign in. On the Kindle, run `tools/voyage-readonly-probe.sh` (read-only, prints to stdout). It drops Serial lines, MAC-shaped strings and 12-digit hex ids. Do not add `/proc/board_id` or a Wi-Fi name.
+## Still missing before a first boot claim
 
-The commands below are the same questions the script asks:
+Until a runtime machine id is collected and `identity_ready` / `device_confirmed` / `installable` are opened on evidence, an installable entry is not packed and the device is not started. A first Android boot would still be a separate step after that, and this round does not authorize it.
 
-```sh
-uname -a
-sed -n '1,5p' /proc/version
-grep -E 'Hardware|Revision' /proc/cpuinfo
-wc -c /usr/sbin/eips; sha256sum /usr/sbin/eips
-tr '\0' '\n' < /proc/cmdline
-awk '$1=="System" || /System RAM/' /proc/iomem
-awk '$4 ~ /mmcblk0/ {print}' /proc/partitions
-cat /sys/class/block/mmcblk0/size
-for b in mmcblk0 mmcblk0p1 mmcblk0p2 mmcblk0p3 mmcblk0p4 mmcblk0boot0 mmcblk0boot1; do
-  echo "$b $(cat /sys/class/block/$b/ro 2>/dev/null) $(cat /sys/class/block/$b/size 2>/dev/null)"
-done
-df -k /mnt/us /mnt/base-us
-```
-
-The kernel function-body hashes (`pm_test_show`, `l2x0_flush_all`, `l2x0_disable`, `l2x0_inv_all`) have to be computed from the official kernel image that matches the `uname` above, not from the Paperwhite 3 record. Until then the handoff module should not be built.
+Any expansion into boot partitions or memory needs a separate necessity-and-risk note first; it is not done in this round.

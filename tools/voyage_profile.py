@@ -77,6 +77,9 @@ def problems(profile, pw3=None):
     for key in MEASURED_KEYS:
         if not measured.get(key):
             found.append('measured.%s is empty' % key)
+    cmdline = measured.get('stock_cmdline')
+    if isinstance(cmdline, str) and '[redacted]' in cmdline:
+        found.append('measured.stock_cmdline contains a redacted value')
     if pw3 is not None:
         found.extend(_copied_pw3_handoff(profile, pw3))
     return found

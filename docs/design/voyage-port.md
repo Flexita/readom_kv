@@ -18,52 +18,51 @@ GPL 成员里的 `BUILD_HOW-TO.txt` 写明 Voyage 用 `imx60_wario_defconfig`。
 
 `arch/arm/plat-mxc/include/mach/memory.h` 同时有 `MX6SL_PHYS_OFFSET`（0x80000000）和在 `CONFIG_ARCH_MX6` 下选中的 `MX6_PHYS_OFFSET`（0x10000000）。`board-mx6sl_wario.c` 的 `boot_params` 用的是前者。交接不用这两个数里的任何一个。
 
-同一天，`tools/apply-patch-series.py` 把 `patches/*.patch` 和 `patches/android-core/*.patch` 共 **85** 个补丁打到这份成员解出的干净树上，**0** 个失败。接着用这份树上的 `imx60_wario_defconfig` 加上 `config/android-core.config` 和一份临时的 Voyage 片段（`LOCALVERSION=-lab126-voyage-android81`、`ARCH_MMAP_RND_BITS=16`、`LAB126_ANDROID_ATH6KL_FIRMWARE=y`）跑 `merge-kconfig.py --check`，**147** 项请求全部生效。
+同一天，`tools/apply-patch-series.py` 把 `patches/*.patch` 和 `patches/android-core/*.patch` 共 **85** 个补丁打到这份成员解出的干净树上，**0** 个失败。用锁定的 AOSP gcc 4.9 编出的内核发行名是 `3.0.35-lab126-voyage-android81+`，**不是**真机上的 `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021`，不能拿它的函数体冒充原厂内核。
 
-本机 gcc 13.3 编不了这棵 3.0 树（`proc-v7.S` 的 `#`）。改用锁定的 AOSP gcc 4.9：仓库 `https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9`，检出 `0390252b6bcc6217966ade31d07f8b12f6f78f89`（`git rev-parse` 与 `source-lock.json` 的 `revision` 一致）。`git archive` 的哈希对不上锁里的 `archive_sha256`：那是一份没有公开 URL 的打包，来源以 git 修订号为准。没有改内核补丁。
+## 离线解包官方更新包里的原厂内核
 
-用这个编译器、`imx60_wario_defconfig` 和上面的 147 项配置编出了内核。`include/generated/utsrelease.h` 是 `3.0.35-lab126-voyage-android81+`。末尾的 `+` 是因为打过补丁的树相对那次 `git commit` 是脏的，不是发行名。编译命令带 `-msoft-float`。这是编译结果，不是真机启动。
+用户授权对公开官方 Voyage 5.13.6 更新包做离线格式解析。下载文件的 SHA-256 只证明下载完整性，**不等于** RSA 验签。KindleTool `extract` 按 SP01→FB03 Recovery V2 解开，没有 `--unsigned`，没有改签名，也没有运行解出的代码。
 
 | 产物 | SHA-256 |
 |---|---|
-| `zImage` | `bfc22d8738da550af66e378618083eaf7e24e579962dc4e6511c13fd42a1b735` |
-| `uImage` | `8fe014996a74ae8215fa0dbe20992175a5d154054baa62e75f4d2e41a068e89d` |
+| `imx60_wario/uImage` | `add9b0a2…a9ca32`（IH_NAME `Linux-3.0.35-lab126`，load `0x80008000`） |
+| uImage 内 zImage | `934302ee…35e74e` |
+| 从 zImage piggy inflate 的 Image | `bb15c171…76530` |
 
-uImage 头里的加载地址是 `0x80008000`。这是这次编译写进头里的数，来自该 defconfig 的 `MX6SL_PHYS_OFFSET`，不是从 PW3 配置抄来的，也还不是设备上 `/proc/iomem` 的读数，所以仍然不放进 `measured.ram`。
+Image 里带有与真机完全一致的横幅：`Linux version 3.0.35-lab126 (builder@eink-builds) (gcc version 4.9.1 (GCC) ) #2 PREEMPT Thu Apr 8 09:39:57 UTC 2021`。从 kallsyms 解出四个符号，按下一符号地址截断后对函数体做 SHA-256，写入 `measured.stock_functions`。字节数与 PW3 记录相同，哈希不同。
 
-原厂侧静态程序按 `tools/build-test-libc.sh` 的办法编了 musl 1.2.5（归档 SHA-256 `a9a118bb…c75e4`，与 `source-lock.json` 一致），`-mfloat-abi=soft`。用它静态链接了 `boot/handoff/sha256.c`。ELF 头标志是 `Version5 EABI, soft-float ABI`，没有 `INTERP`。`qemu-arm-static` 对输入 `voyage` 算出的 SHA-256 与主机 Python 相同。这不是完整的 `Readom.sh`：完整入口还要内核、initramfs 和 AOSP 镜像，那些没有在这里打包。
+## 2026-11-12 的只读真机报告
 
-官方 `update.bin` 里没有 squashfs 魔数，也没有明文的 `Linux version` 或 `eips`。偏移 30755 处的 `1f 8b` 不是 gzip。因此没有从固件里取出 uname、eips 哈希或分区表。没有去拆签名或写分区。
+第一份报告 2195 字节，SHA-256 `eab14ee9…4f15`，末行 `VOYAGE_PROBE_DONE`，`uid=0`。补充报告 1779 字节，SHA-256 `47a04517…a4ed`，末行 `VOYAGE_PROBE_EXTRA_DONE`，`result: partial`，`errors: 1`（`/proc/bootmode` 为空）。
 
-## 没有、所以拒绝安装的
+已经写入 `measured` 的：
 
-`measured` 里这些键都是 null：`eips_sha256`、`eips_bytes`、`uname_release`、`uname_version`、`machine_id`、`stock_cmdline`、`ram`、`partition_table`、`stock_functions`。
+| 项 | 读数 |
+|---|---|
+| eips | 61104 字节，`7916bee5…6259` |
+| uname | `3.0.35-lab126`，`#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021` |
+| System RAM | `80000000-9fffffff` |
+| stock_cmdline | `rootwait log_pos_goal=0x8fff0000 console=ttymxc0,115200 root=/dev/mmcblk0p1 ro ip=off quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M`（与 PW3 的 `cmdline_base` 不同：多了 `rootwait` 和 `root=`） |
+| 分区起点（512 字节扇区） | p1=65536，p2=987136，p3=1118208，p4=1249280；整盘与 boot 节点按设计不读 start |
+| 用户 FAT loop | backing `/dev/mmcblk0p4`，offset 8192 |
+| stock_functions | 见上，来自与 uname 一致的官方 Image |
 
-校验器拒绝的是 PW3 上量到的那几样：eips 哈希、`uname -v` 构建戳、命令行、内核函数体。Voyage 的 `mach-types` 自己写着 4091，defconfig 自己写着 `CONFIG_LOCALVERSION="-lab126"`，所以机器号 4091 和发行串 `3.0.35-lab126` 如果真机读数相同，不算抄袭，校验器放行。内存布局即使碰巧相同也不拒绝，以免逼人编一个假的差异；但现在 `measured.ram` 仍是空的，因为源码里两个物理基址对不上。
+不能补、也不猜的：
 
-`tools/voyage_profile.py` 在 `boot/build_entry.py`、`boot/build_launcher.py`（带安装器）和 `boot/build_module.py` 里被调用。缺任何一项，或者 Voyage 的测量值等于 Paperwhite 3 的 eips、uname、命令行或内核函数体记录，构建直接退出。运行时 `CHECK_PROFILE == 3` 在加载模块和 `install()` 之前写日志并停在 E105。`dd_voyage_5_13_6.identity_ready` 为 0，`dd_device_matches` 在做字符串比较之前返回。
+- `measured.machine_id` 仍是 null。没有只发布该数字的普通 proc 文件；`/proc/atags` 还带着 board id 和 MAC，不读。源码里的 4091 只留在 `source`。
+- `/proc/bootmode` 读出来是空字符串。这是补充报告里唯一的 error，**不能**写成 `main`。
+- Wi-Fi：飞行模式下 `ar6000` / `ath6kl*` 未加载。`/opt/ar6k/...` 下有候选普通文件及大小，**不等于**已确认的运行时驱动路径。
+- 不读 `/proc/kcore`、`/dev/mem`、引导分区或任意为取内核而打开的块设备。公开固件已给出匹配内核，因此不再产出根文件系统内核文件探测脚本。
 
-## 空间（估计）
+`tools/voyage_profile.py` 仍要求 `installable`、`identity_ready`、`device_confirmed` 和全部 `measured` 键。缺 `machine_id` 时构建照样退出。运行时 `CHECK_PROFILE == 3` 在加载模块和 `install()` 之前停在 E105。
 
-系统镜像保持 512 MiB。数据镜像改为 1024 MiB，格式号 2。加上 64 MiB 余量，安装要求 **1600 MiB 空闲**。依据和“没在 Voyage 上量过”写在 `device/amazon/pw3/BoardConfig.mk`。512 MB 内存上的堆参数没有改：那些数是在同系列芯片的 PW3 上量的，改了却没新的测量就不算优化。
+## 空间
 
-## 真机上要只读采集的
+系统镜像 512 MiB，数据镜像 1024 MiB，格式号 2。安装峰值仍是 **1600 MiB 空闲**。这次报告的用户区空闲只有约 70 MiB，不够，门槛不因此降低。
 
-不要运行 `Readom.sh`，不要登录。在 Kindle 上执行 `tools/voyage-readonly-probe.sh`（只读，打印到标准输出）。脚本会删掉 Serial 行、MAC 形状的字符串和 12 位十六进制编号。不要把 `/proc/board_id` 或 Wi-Fi 名加进去。下面这段和脚本问的是同一组事：
+## 还没做、所以不能说能启动
 
-```sh
-uname -a
-sed -n '1,5p' /proc/version
-grep -E 'Hardware|Revision' /proc/cpuinfo
-wc -c /usr/sbin/eips; sha256sum /usr/sbin/eips
-tr '\0' '\n' < /proc/cmdline
-awk '$1=="System" || /System RAM/' /proc/iomem
-awk '$4 ~ /mmcblk0/ {print}' /proc/partitions
-cat /sys/class/block/mmcblk0/size
-for b in mmcblk0 mmcblk0p1 mmcblk0p2 mmcblk0p3 mmcblk0p4 mmcblk0boot0 mmcblk0boot1; do
-  echo "$b $(cat /sys/class/block/$b/ro 2>/dev/null) $(cat /sys/class/block/$b/size 2>/dev/null)"
-done
-df -k /mnt/us /mnt/base-us
-```
+运行时机器号到齐、并把 `identity_ready` / `device_confirmed` / `installable` 按证据打开之前，不能打包可安装入口，也不能在设备上启动。即便以后到齐，第一次启动 Android 仍是单独的一步，这一轮没有授权。
 
-内核函数体哈希（`pm_test_show`、`l2x0_flush_all`、`l2x0_disable`、`l2x0_inv_all`）要等上面的 `uname` 对上某一份官方内核镜像之后，从那份镜像而不是从 PW3 记录里算。在此之前交接模块不应被编出来。
+若要把采集扩大到引导分区或内存：先单独说明必要性与风险，这一轮不执行。

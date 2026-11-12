@@ -7,6 +7,23 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
+STOCK_FUNCTION_SHA256 = {
+    'pm_test_show': '71025c707238a74117fc7a7065546f17efa057bb3084f17bdfe048d878543074',
+    'l2x0_flush_all': '5879a00e18ecd63fcb974d2a93a3d193092213037d2a10cb64a381a8f7350131',
+    'l2x0_disable': '2fb38c26df26f978137ab7e84c60f57af8ff41e25170af0a6dc09be17e0dd9f9',
+    'l2x0_inv_all': 'b38adb741635cfd2ddf38549cbf23c1d7246073b403528539335d72d2fe3368a',
+}
+STOCK_FUNCTION_BYTES = {
+    'pm_test_show': 124,
+    'l2x0_flush_all': 116,
+    'l2x0_disable': 124,
+    'l2x0_inv_all': 152,
+}
+VOYAGE_CMDLINE = (
+    'rootwait log_pos_goal=0x8fff0000 console=ttymxc0,115200 '
+    'root=/dev/mmcblk0p1 ro ip=off quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M'
+)
+
 
 def load_module():
     path = ROOT / 'tools/voyage_profile.py'
@@ -28,6 +45,7 @@ class VoyageProfile(unittest.TestCase):
         self.assertIn('installable is not true', found)
         self.assertIn('identity_ready is not true', found)
         self.assertIn('device_confirmed is not true', found)
+        self.assertIn('measured.machine_id is empty', found)
         with self.assertRaises(SystemExit):
             self.mod.refuse_unless_installable(self.mod.VOYAGE_PROFILE)
 
@@ -74,6 +92,81 @@ class VoyageProfile(unittest.TestCase):
         self.assertEqual(source['patches_applied'], 85)
         self.assertEqual(source['patches_failed'], 0)
 
+    def test_a_redacted_command_line_cannot_open_the_gate(self):
+        ready = json.loads(self.text)
+        ready['installable'] = True
+        ready['identity_ready'] = True
+        ready['device_confirmed'] = True
+        ready['measured'] = {
+            'eips_sha256': 'a' * 64,
+            'eips_bytes': 61104,
+            'uname_release': '3.0.35-lab126',
+            'uname_version': '#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021',
+            'machine_id': 4091,
+            'stock_cmdline': 'log_pos_goal=[redacted] console=ttymxc0,115200 ro ip=[redacted] quiet',
+            'ram': self.pw3['ram'],
+            'partition_table': {'sysfs_ro': 0},
+            'stock_functions': {'pm_test_show': {'bytes': 4, 'sha256': 'b' * 64}},
+        }
+        found = self.mod.problems(ready, self.pw3)
+        self.assertIn('measured.stock_cmdline contains a redacted value', found)
+
+    def test_probe_and_extra_probe_records(self):
+        probe = self.voyage['device_probe']
+        self.assertEqual(probe['sha256'],
+                         'eab14ee928b2abaf6925d1fd2f04e461c1bc0525fef01a6cd5b9252b05864f15')
+        self.assertEqual(probe['bytes'], 2195)
+        self.assertEqual(probe['uid'], 0)
+        extra = self.voyage['device_probe_extra']
+        self.assertEqual(extra['sha256'],
+                         '47a04517af9e353643eaa98aba484ab4ea34adb899f3b49b6be79b4604e5a4ed')
+        self.assertEqual(extra['bytes'], 1779)
+        self.assertEqual(extra['uid'], 0)
+        self.assertEqual(extra['result'], 'partial')
+        self.assertEqual(extra['errors'], 1)
+        self.assertEqual(extra['bootmode'], '')
+        self.assertEqual(extra['machine_id'], 'not collected')
+        self.assertNotIn('main', extra['bootmode'])
+        self.assertEqual(extra['wifi_modules_loaded'], [])
+        self.assertEqual(len(extra['wifi_candidates']), 4)
+
+    def test_measured_fields_from_probes_and_offline_kernel(self):
+        measured = self.voyage['measured']
+        self.assertEqual(measured['eips_sha256'],
+                         '7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259')
+        self.assertEqual(measured['eips_bytes'], 61104)
+        self.assertEqual(measured['uname_release'], '3.0.35-lab126')
+        self.assertEqual(measured['uname_version'],
+                         '#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021')
+        self.assertEqual(measured['ram'], [['0x80000000', '0x20000000']])
+        self.assertEqual(measured['stock_cmdline'], VOYAGE_CMDLINE)
+        self.assertNotEqual(measured['stock_cmdline'], self.pw3['cmdline_base'])
+        self.assertIsNone(measured['machine_id'])
+        starts = {
+            d['name']: d.get('start_512')
+            for d in measured['partition_table']['devices']
+        }
+        self.assertEqual(starts['mmcblk0p1'], 65536)
+        self.assertEqual(starts['mmcblk0p2'], 987136)
+        self.assertEqual(starts['mmcblk0p3'], 1118208)
+        self.assertEqual(starts['mmcblk0p4'], 1249280)
+        self.assertIsNone(starts['mmcblk0'])
+        self.assertIsNone(starts['mmcblk0boot0'])
+        fat = measured['partition_table']['user_fat']
+        self.assertEqual(fat['loop_offset_bytes'], 8192)
+        self.assertEqual(fat['backing_file'], '/dev/mmcblk0p4')
+        funcs = measured['stock_functions']
+        for name, digest in STOCK_FUNCTION_SHA256.items():
+            self.assertEqual(funcs[name]['sha256'], digest, name)
+            self.assertEqual(funcs[name]['bytes'], STOCK_FUNCTION_BYTES[name], name)
+            self.assertNotEqual(digest, self.pw3['stock_functions'][name]['sha256'], name)
+        self.assertEqual(
+            self.voyage['source']['stock_image_sha256'],
+            'bb15c17193f8a3b8dba3d27433fd7e6322ac013defcbff5c950ceee703f76530')
+        self.assertIs(self.voyage['installable'], False)
+        self.assertIs(self.voyage['identity_ready'], False)
+        self.assertIs(self.voyage['device_confirmed'], False)
+
     def test_source_verified_shared_values_are_not_refused(self):
         """4091 and 3.0.35-lab126 are in the Voyage GPL tree, not only on the PW3."""
         ready = json.loads(self.text)
@@ -112,6 +205,14 @@ class VoyageProfile(unittest.TestCase):
             'stock_functions': {'pm_test_show': {'bytes': 1, 'sha256': 'b' * 64}},
         }
         self.assertEqual(self.mod.problems(ready, self.pw3), [])
+
+    def test_filled_voyage_still_blocked_without_machine_id(self):
+        """Command line and stock_functions can be real while machine_id stays null."""
+        found = self.mod.problems(self.voyage, self.pw3)
+        self.assertIn('measured.machine_id is empty', found)
+        self.assertNotIn('measured.stock_cmdline is empty', found)
+        self.assertNotIn('measured.stock_functions is empty', found)
+        self.assertNotIn('measured.stock_cmdline contains a redacted value', found)
 
 
 if __name__ == '__main__':

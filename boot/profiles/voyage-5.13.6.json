@@ -1,18 +1,18 @@
 {
-  "description": "Kindle Voyage (7th generation), stock firmware 5.13.6. A root read-only probe on 2026-11-12 filled the readings that were complete. Not installable: the command line is incomplete, the runtime machine id was not read, and the stock kernel function bodies were not hashed.",
+  "description": "Kindle Voyage (7th generation), stock firmware 5.13.6. Root read-only probes and an offline unpack of the official update.bin filled the readings that were complete. Not installable: the runtime machine id was not collected, /proc/bootmode was empty, and identity_ready stays false.",
   "installable": false,
   "identity_ready": false,
   "device_confirmed": false,
   "module_profile": 3,
-  "supported_zh": "Kindle Voyage（第 7 代），固件 5.13.6。eips 和 uname 已从真机读到。这个构建仍不能安装：命令行不完整，运行时机器号和内核函数体还没有。",
-  "supported_en": "Kindle Voyage (7th generation), firmware 5.13.6. eips and uname were read from a device. This build still cannot be installed: the command line is incomplete, and the runtime machine id and kernel function bodies are not.",
+  "supported_zh": "Kindle Voyage（第 7 代），固件 5.13.6。eips、uname、命令行、分区起点和四个原厂函数体已有证据。这个构建仍不能安装：运行时机器号没有采集，/proc/bootmode 为空。",
+  "supported_en": "Kindle Voyage (7th generation), firmware 5.13.6. eips, uname, the command line, partition starts and the four stock function bodies have evidence. This build still cannot be installed: the runtime machine id was not collected and /proc/bootmode was empty.",
   "measured": {
     "eips_sha256": "7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259",
     "eips_bytes": 61104,
     "uname_release": "3.0.35-lab126",
     "uname_version": "#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021",
     "machine_id": null,
-    "stock_cmdline": null,
+    "stock_cmdline": "rootwait log_pos_goal=0x8fff0000 console=ttymxc0,115200 root=/dev/mmcblk0p1 ro ip=off quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M",
     "ram": [
       [
         "0x80000000",
@@ -24,25 +24,52 @@
       "root_mount": "ro",
       "root_cmdline": "root=/dev/mmcblk0p1",
       "ro_note": "sysfs ro=0 is the block read-only flag. The root filesystem is mounted read-only. Those are not the same fact, and neither one authorizes writing mmcblk0p1 or the boot partitions.",
-      "starts_not_read": true,
+      "starts_unit": "512-byte sectors from sysfs",
+      "starts_note": "start was read for mmcblk0p1..p4 only. The whole disk and the boot nodes have no start in the extra probe by design.",
       "devices": [
         {"name": "mmcblk0", "sectors_512": 7733248, "blocks_1k": 3866624, "sysfs_ro": 0},
-        {"name": "mmcblk0p1", "sectors_512": 921600, "blocks_1k": 460800, "sysfs_ro": 0},
-        {"name": "mmcblk0p2", "sectors_512": 131072, "blocks_1k": 65536, "sysfs_ro": 0},
-        {"name": "mmcblk0p3", "sectors_512": 131072, "blocks_1k": 65536, "sysfs_ro": 0},
-        {"name": "mmcblk0p4", "sectors_512": 6385664, "blocks_1k": 3192832, "sysfs_ro": 0},
+        {"name": "mmcblk0p1", "sectors_512": 921600, "blocks_1k": 460800, "start_512": 65536, "sysfs_ro": 0},
+        {"name": "mmcblk0p2", "sectors_512": 131072, "blocks_1k": 65536, "start_512": 987136, "sysfs_ro": 0},
+        {"name": "mmcblk0p3", "sectors_512": 131072, "blocks_1k": 65536, "start_512": 1118208, "sysfs_ro": 0},
+        {"name": "mmcblk0p4", "sectors_512": 6385664, "blocks_1k": 3192832, "start_512": 1249280, "sysfs_ro": 0},
         {"name": "mmcblk0boot0", "sectors_512": 4096, "blocks_1k": 2048, "sysfs_ro": 0},
         {"name": "mmcblk0boot1", "sectors_512": 4096, "blocks_1k": 2048, "sysfs_ro": 0}
       ],
       "user_fat": {
         "mount": "/mnt/us",
         "loop_mount": "/mnt/base-us",
+        "loop_source": "/dev/loop/0",
+        "backing_file": "/dev/mmcblk0p4",
+        "loop_offset_bytes": 8192,
+        "loop_sizelimit": 0,
         "blocks_1k": 3188640,
         "used_1k": 3116848,
         "available_1k": 71792
       }
     },
-    "stock_functions": null
+    "stock_functions": {
+      "pm_test_show": {
+        "bytes": 124,
+        "sha256": "71025c707238a74117fc7a7065546f17efa057bb3084f17bdfe048d878543074",
+        "addr": "0xc01c0290"
+      },
+      "l2x0_flush_all": {
+        "bytes": 116,
+        "sha256": "5879a00e18ecd63fcb974d2a93a3d193092213037d2a10cb64a381a8f7350131",
+        "addr": "0xc01631a8"
+      },
+      "l2x0_disable": {
+        "bytes": 124,
+        "sha256": "2fb38c26df26f978137ab7e84c60f57af8ff41e25170af0a6dc09be17e0dd9f9",
+        "addr": "0xc0163590"
+      },
+      "l2x0_inv_all": {
+        "bytes": 152,
+        "sha256": "b38adb741635cfd2ddf38549cbf23c1d7246073b403528539335d72d2fe3368a",
+        "addr": "0xc016360c"
+      }
+    },
+    "stock_functions_source": "Offline format parse of the official update_kindle_voyage_5.13.6.bin (download SHA-256 80856a11…7a155b; that hash is integrity of the downloaded file, not an RSA signature check). KindleTool extract unpacked SP01→FB03 Recovery V2 without --unsigned and without modifying signatures. uImage sha256 add9b0a29a769c241144bf245de2b94848d24aabb5765662714d0afde5a9ca32 (IH_NAME Linux-3.0.35-lab126, load 0x80008000, uncompressed). zImage payload sha256 934302ee62ff8eea3aa41f1c2c5fef465e28590567573b7eaab084158c35e74e. Inflated Image sha256 bb15c17193f8a3b8dba3d27433fd7e6322ac013defcbff5c950ceee703f76530 contains the exact device banner Linux version 3.0.35-lab126 (builder@eink-builds) (gcc version 4.9.1 (GCC) ) #2 PREEMPT Thu Apr 8 09:39:57 UTC 2021. Bodies are SHA-256 of each symbol through the next kallsyms address, file offset = addr - 0xc0008000. Not the rebuilt Android kernel. Extracted code was not executed."
   },
   "device_probe": {
     "sha256": "eab14ee928b2abaf6925d1fd2f04e461c1bc0525fef01a6cd5b9252b05864f15",
@@ -59,8 +86,33 @@
     "iomem_system_ram": "80000000-9fffffff",
     "cmdline_filtered": "rootwait log_pos_goal=[redacted] console=ttymxc0,115200 root=/dev/mmcblk0p1 ro ip=[redacted] quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M",
     "cmdline_redacted_keys": ["log_pos_goal", "ip"],
-    "cmdline_withheld": "The filtered line is not a handoff command line. log_pos_goal and ip were removed before the report was kept and are not guessed.",
+    "cmdline_withheld": "The first probe redacted log_pos_goal and ip. The extra probe later kept allow-listed values; measured.stock_cmdline uses that second report.",
     "capacity_note": "The owner states the chip is 4 GB and USB shows about 3.3 GB. mmcblk0 is 3959422976 bytes. mmcblk0p4 is 3269459968 bytes. The mounted FAT is 3265167360 bytes total and had 73515008 bytes free. None of these is 3 GB of free space."
+  },
+  "device_probe_extra": {
+    "sha256": "47a04517af9e353643eaa98aba484ab4ea34adb899f3b49b6be79b4604e5a4ed",
+    "bytes": 1779,
+    "generated": "Thu Nov 12 13:00:15 GMT+8:0100 2026",
+    "uid": 0,
+    "marker": "VOYAGE_PROBE_EXTRA_DONE",
+    "result": "partial",
+    "errors": 1,
+    "bootmode": "",
+    "bootmode_note": "error: bootmode empty. The file existed and read as empty. That is not main and is not written into any handoff field.",
+    "machine_id": "not collected",
+    "machine_id_note": "No proc file publishes only the numeric machine id. /proc/atags also carries the board id and MAC, so it was not read. mach-types 4091 stays under source only.",
+    "cmdline_kept": "rootwait log_pos_goal=0x8fff0000 console=ttymxc0,115200 root=/dev/mmcblk0p1 ro ip=off quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M",
+    "cmdline_withheld_keys": [],
+    "wifi_modules_loaded": [],
+    "wifi_modules_absent": ["ar6000", "ath6kl_sdio", "ath6kl"],
+    "wifi_candidates": [
+      {"path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/AR6803_default.bin", "bytes": 2048},
+      {"path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/AR6003_wfo_calfile.bin", "bytes": 2048},
+      {"path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/fw-4.bin", "bytes": 92991},
+      {"path": "/opt/ar6k/target/AR6003/hw2.1.1/bin/athwlan.bin", "bytes": 114064}
+    ],
+    "wifi_note": "Airplane mode: modules were not loaded. Candidate ordinary files exist with the sizes above. That is not a confirmed runtime driver path.",
+    "wifim": "absent"
   },
   "source": {
     "gpl_url": "https://kindledownloads.s3.amazonaws.com/Kindle_src_5.13.6_3731990038.tar.gz",
@@ -72,7 +124,10 @@
     "firmware_url": "https://s3.amazonaws.com/firmwaredownloads/update_kindle_voyage_5.13.6.bin",
     "firmware_sha256": "80856a112393a5a8c18ed66752193f5702abb2d9476a2d8657082bb11f7a155b",
     "firmware_bytes": 247461749,
-    "firmware_note": "Official update.bin, magic SP01. No squashfs magic and no plaintext Linux version or eips. The 1f8b bytes at offset 30755 are not a gzip stream. uname, eips and partition geometry were not extracted.",
+    "firmware_note": "Official update.bin, magic SP01, cert 2, inner FB03 Recovery V2, target OTA 3731990038. KindleTool extract (format parse; download SHA-256 is not RSA verification) yields imx60_wario/uImage matching the device uname banner. Signatures were not stripped or altered. Extracted blobs were not executed.",
+    "stock_uimage_sha256": "add9b0a29a769c241144bf245de2b94848d24aabb5765662714d0afde5a9ca32",
+    "stock_zimage_sha256": "934302ee62ff8eea3aa41f1c2c5fef465e28590567573b7eaab084158c35e74e",
+    "stock_image_sha256": "bb15c17193f8a3b8dba3d27433fd7e6322ac013defcbff5c950ceee703f76530",
     "kernel_makefile": "3.0.35",
     "kernel_makefile_sha256": "903f3c043adcff6419ab7102238edb2a9172596466a9289e91b7001477066462",
     "defconfig": "imx60_wario_defconfig",
@@ -81,6 +136,8 @@
     "mach_types_sha256": "2820fc425ae33c39f6318d36a67d0f7d2e6f94eccd2f070c934a0beda86e253c",
     "mach_mx6sl_wario_from_mach_types": 4091,
     "mach_types_note": "arch/arm/tools/mach-types in the GPL member names mx6sl_wario as 4091. That is a source fact. It is not copied into measured.machine_id and is not sufficient to hand off.",
+    "bootmode_source_note": "arch/arm/mach-mx6/boardid.c publishes /proc/bootmode from idme system_bootmode. An empty read is not main. No ordinary rootfs file replaces a runtime reading.",
+    "machine_id_source_note": "Handoff compares __machine_arch_type to TARGET_MACHINE. No proc file publishes only that number. /proc/atags also carries board id and MAC. Expanding to boot partitions or memory is not done in this round.",
     "vm_split": "CONFIG_VMSPLIT_3G",
     "page_offset": "0xC0000000",
     "ath6kl": "CONFIG_ATH6KL=m and CONFIG_ATH6KL_SDIO=m in imx60_wario_defconfig",

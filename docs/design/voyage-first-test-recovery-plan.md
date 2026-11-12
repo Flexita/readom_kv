@@ -1,7 +1,7 @@
 # Voyage 首次测试与恢复方案（只写不执行）
 
 **状态：** 提案。未授权清理、部署、安装或首次启动。  
-**前提：** 云端已有私有实验候选包 `VoyageExperimental-unverified.sh`（**不是** `Readom.sh`；`device_confirmed=false`）。具备向设备所有者**请求**首次实验授权的云端条件；**不具备**日用/发行/已验证可启动的声明。
+**前提：** 云端已有私有 **USB 离线**实验候选 `VoyageExperimental-offline.sh`（`offline_only=1`，**无**下载 URL；**不是** `Readom.sh`；`device_confirmed=false`）。具备向设备所有者**请求**首次实验授权的云端条件；**不具备**日用/发行/已验证可启动的声明。
 
 ## 阶段
 
@@ -30,12 +30,13 @@
 **停止条件：** 用户未书面确认路径；或清完后 `df` 仍 &lt; 建议值。  
 **恢复：** 不做自动删除。
 
-### 2. 载荷托管与入口放置（未授权）
+### 2. USB 离线拷贝（未授权；默认路径）
 
-- 候选入口内嵌的下载目录默认是 `https://private.invalid/...`（占位）；真正实验前须用真实 https 目录托管  
-  `readom-system-experimental-0.img.zst` / `readom-data-experimental-0.img.zst`，或用 `--release-url` 重建入口。
-- 入口文件名是 `VoyageExperimental-unverified.sh`，**不要**改名为 `Readom.sh`。
-- USB 必须拔掉（E104）；安装器在写盘前做机型匹配（错机 → E101）。
+- 入口：`VoyageExperimental-offline.sh`（`offline_only=1`，**不请求外网**）。缺本地载荷 → E303；错误大小 → E302。
+- 与入口同目录拷贝：`documents/readom-system-experimental-0.img.zst`（精确文件名与字节数；数据模板已打进入口）。
+- Agent Store（本轮）：`/cursor/stores/self/artifacts/voyage-usb-offline-experimental-kit-20261112/`（载荷按 48 MiB 分卷；宿主机 `REASSEMBLE-ON-HOST.sh` 后再拷 Kindle）。
+- **不要**改名为 `Readom.sh`。USB 必须拔掉（E104）；写盘前机型匹配（错机 → E101）。
+- 空间（本 kit 实测算术）：拷贝前空闲 **≥ ~1607.5 MiB**；两文件已在 documents 后空闲 **≥ ~1450.8 MiB**（含 64 MiB reserve；dexopt 另计）。
 
 ### 3. 首次 handoff（未授权）
 
@@ -67,10 +68,10 @@
 | 必要条件 | 现状 |
 |---|---|
 | Staging + 校验报告 | 有 |
-| 可执行实验入口（非 Readom.sh）且 fail-closed 到授权点 | **有**（experimental；device_confirmed=false） |
+| 可执行实验入口（非 Readom.sh）且 fail-closed 到授权点 | **有**（USB offline；device_confirmed=false） |
 | C identity + 错机拒绝证据 | **有**（host 测试通过） |
-| 真实 payload https 托管 | **未做**（占位 URL） |
-| 用户确认清理项与实测空间 | **未授权** |
+| 本地 USB 载荷（无公网托管） | **有**（Agent Store 分卷 + 宿主机拼接） |
+| 用户确认清理项与实测空间（≥~1607.5 MiB 拷贝前） | **未授权** |
 | Voyage 上至少一条不依赖“已启动的 Android”的退路 | 文档级有；**硬件未测** |
 
-因此：**可以向用户请求首次实验授权（含托管 URL、清空间、拔 USB），但不能声称已验证可日用或可安全发行。**
+因此：**可以向用户请求首次实验授权（清空间、USB 拷贝两文件、拔线、点 Experimental），但不能声称已验证可日用或可安全发行。**不需要公开托管或 GitHub Release。**

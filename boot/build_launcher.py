@@ -235,8 +235,13 @@ def installer_inputs(a, conf, data_path, data_size):
     voyage_profile = importlib.util.module_from_spec(spec_v)
     spec_v.loader.exec_module(voyage_profile)
     voyage_profile.refuse_unless_installable(profile_path)
-    if not (a.screens and a.release_url and a.ca_bundle and a.zstd_archive and a.system_image):
-        sys.exit('--installer needs --screens, --system-image, --release-url, --ca-bundle and --zstd-archive')
+    offline_only = bool(getattr(a, 'offline_only', False))
+    if offline_only and a.release_url:
+        sys.exit('--offline-only cannot be combined with --release-url')
+    if not (a.screens and a.ca_bundle and a.zstd_archive and a.system_image):
+        sys.exit('--installer needs --screens, --system-image, --ca-bundle and --zstd-archive')
+    if not offline_only and not a.release_url:
+        sys.exit('--installer needs --release-url (or pass --offline-only for USB documents/ payload)')
     lock = json.loads((PORT / 'source-lock.json').read_text())
     manifest = json.loads((a.installer / 'manifest.json').read_text())
     if manifest['schema'] != 4:
@@ -267,30 +272,24 @@ def installer_inputs(a, conf, data_path, data_size):
     if screens.get('supported') != [profile['supported_zh'], profile['supported_en']]:
         sys.exit('the screens were rendered for another model: ' + str(screens.get('supported')))
     # --release-url is the directory the asset sits in; the payload's own name is
-    # appended here. V65 shipped with the name given twice -- .../v65/NAME/NAME --
-    # because the full file URL was passed instead. Nothing noticed: the install
-    # being tested had the payload on the Kindle drive already, so the URL was
-    # never fetched, and it would have 404'd for the one person who needs it, the
-    # one who only downloads. A wrong *version* in the URL needs no check of its
-    # own -- the payload is admitted by its sha256 (install.h), so the wrong asset
-    # is refused rather than installed.
-    # One per origin, in the order the installer will try them. The validator is
-    # per URL, so a second origin is held to exactly the same shape as the first;
-    # duplicates are refused because an origin listed twice costs an attempt and
-    # buys nothing.
-    urls = [release_asset_url(u, system['name']) for u in a.release_url]
-    if len(set(urls)) != len(urls):
-        sys.exit('--release-url is given twice with the same address')
-    if len(urls) > max_origins():
-        sys.exit('--release-url is given %d times; the installer carries at most %d'
-                 % (len(urls), max_origins()))
+    # appended here. Offline-only entries carry no URL: the payload must already
+    # sit in documents/<payload_name> with the exact length (existing USB path).
+    urls = []
+    if not offline_only:
+        urls = [release_asset_url(u, system['name']) for u in a.release_url]
+        if len(set(urls)) != len(urls):
+            sys.exit('--release-url is given twice with the same address')
+        if len(urls) > max_origins():
+            sys.exit('--release-url is given %d times; the installer carries at most %d'
+                     % (len(urls), max_origins()))
     incremental = build_incremental(a.system_image, system['unpacked_sha256'])
+    url_init = ', '.join(c_string(u) for u in urls) if urls else ''
     release = ['#include "install.h"', '#include "payload.h"', 'static const struct inst_release pw3_release = {',
                '    .version = %s, .built = %dLL, .data_format = %du,' % (c_string(manifest['version']), manifest['built'],
                                                                       manifest['data_format']),
                '    .payload_name = %s,' % c_string(system['name']),
-               '    .payload_urls = {%s}, .payload_origins = %d,'
-               % (', '.join(c_string(u) for u in urls), len(urls)),
+               '    .payload_urls = {%s}, .payload_origins = %d, .offline_only = %d,'
+               % (url_init, len(urls), 1 if offline_only else 0),
                '    .payload = {%dull, %s},' % (system['bytes'], c_sha(system['sha256'])),
                '    .system = {%dull, %s},' % (system['unpacked_bytes'], c_sha(system['unpacked_sha256'])),
                '    .template_data = pw3_data_template, .template_file = {%dull, %s},' % (data['bytes'], c_sha(data['sha256'])),
@@ -299,7 +298,8 @@ def installer_inputs(a, conf, data_path, data_size):
                '    .build_incremental = %s,' % c_string(incremental),
                '    .ca_bundle = pw3_ca_bundle, .ca_bundle_bytes = %du,' % len(ca), '};']
     receipt = {'version': manifest['version'], 'built_utc': manifest['built_utc'], 'data_format': manifest['data_format'],
-               'payload_urls': urls, 'payload': {k: system[k] for k in ('name', 'bytes', 'sha256')},
+               'payload_urls': urls, 'offline_only': offline_only,
+               'payload': {k: system[k] for k in ('name', 'bytes', 'sha256')},
                'data_template_sha256': data['sha256'], 'boot_image_sha256': manifest['boot_image_sha256'],
                'build_incremental': incremental,
                'screens_sha256': screens['screens_bin']['sha256'],
@@ -332,6 +332,8 @@ def main():
         ap.add_argument('--' + name, type=Path)
     ap.add_argument('--release-url', action='append', default=[],
                     help='the directory the payload sits in; repeat it for a second origin')
+    ap.add_argument('--offline-only', action='store_true',
+                    help='USB documents/ payload only: no download URLs; missing local payload refuses')
     ap.add_argument('--name', required=True)
     ap.add_argument('--title', required=True)
     a = ap.parse_args()

@@ -1695,6 +1695,24 @@ def main():
         T.check('curl 60 (the certificate did not verify): E203, not E201',
                 r['code'] == E['clock'], r)
 
+        # Offline-only USB path: no download URLs; documents/ payload required.
+        # Does not weaken size/hash checks; wrong length refuses before write.
+        off = Release(tmp, 'off', sys1, p1, template, data, offline_only=1, payload_url=[])
+        u, w = T.store()
+        r = T.run(off, u, w, 'online=0')
+        T.check('offline-only, no documents payload: E303, no download, no images',
+                r['code'] == E['release'] and r['downloads'] == 0 and img(u, 'system.img') is None, r)
+        u, w = T.store()
+        (u / 'documents' / off.payload_name).write_bytes(p1 + b'X')
+        r = T.run(off, u, w, 'online=0')
+        T.check('offline-only, wrong documents size: E302, no download',
+                r['code'] == E['payload'] and r['downloads'] == 0 and img(u, 'system.img') is None, r)
+        u, w = T.store()
+        (u / 'documents' / off.payload_name).write_bytes(p1)
+        r = T.run(off, u, w, 'online=0')
+        T.check('offline-only, exact documents payload: installs without download',
+                r['code'] == 0 and r['downloads'] == 0 and img(u, 'system.img') == sys1, r)
+
         print('%d of %d passed' % (T.count - T.failures, T.count))
         sys.exit(1 if T.failures else 0)
 

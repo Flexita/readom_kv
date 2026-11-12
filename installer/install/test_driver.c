@@ -215,6 +215,8 @@ int main(int argc, char **argv)
 			sha_from_hex(v, rel.boot_image);
 		else if (!strcmp(line, "build_incremental"))
 			rel.build_incremental = strcpy(strings[k++], v);
+		else if (!strcmp(line, "offline_only"))
+			rel.offline_only = atoi(v);
 	}
 	if (!f || !rel.version || !rel.template_data || !rel.build_incremental) {
 		fprintf(stderr, "incomplete release file\n");

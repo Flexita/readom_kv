@@ -122,9 +122,15 @@ def main():
         ap.add_argument('--' + name, required=True)
     for name in ['installer', 'screens', 'ca-bundle', 'zstd-archive']:
         ap.add_argument('--' + name, type=Path, required=True)
-    ap.add_argument('--release-url', action='append', default=[], required=True,
-                    help='the directory the payload sits in; repeat it for a second origin, in the order the installer tries them')
+    ap.add_argument('--release-url', action='append', default=[],
+                    help='the directory the payload sits in; repeat for a second origin (omit with --offline-only)')
+    ap.add_argument('--offline-only', action='store_true',
+                    help='USB documents/ payload only: no download URLs embedded')
     a = ap.parse_args()
+    if a.offline_only and a.release_url:
+        sys.exit('--offline-only cannot be combined with --release-url')
+    if not a.offline_only and not a.release_url:
+        sys.exit('need --release-url or --offline-only')
     spec_v = importlib.util.spec_from_file_location('voyage_profile', PORT / 'tools/voyage_profile.py')
     voyage_profile = importlib.util.module_from_spec(spec_v)
     spec_v.loader.exec_module(voyage_profile)
@@ -230,14 +236,19 @@ def main():
     audit = json.loads((out / 'module/cache-audit/result.json').read_text())
     if not audit['passed']:
         sys.exit('cache audit failed: ' + json.dumps(audit['checks']))
-    run([sys.executable, str(HERE / 'build_launcher.py'), '--module', str(out / 'module'), '--kernel', str(out / 'zImage'),
-         '--public-initramfs', str(out / 'public-initramfs.cpio.gz'), '--cmdline', str(out / 'cmdline.txt'),
-         '--preinit-conf', str(out / 'pw3-preinit.conf'), '--data', a.data, '--name', a.name, '--title', a.title,
-         '--output', str(out / 'launcher'),
-         '--installer', str(a.installer), '--screens', str(a.screens),
-         *[arg for u in a.release_url for arg in ('--release-url', u)],
-         '--system-image', str(a.export / 'system.raw.img'), '--ca-bundle', str(a.ca_bundle),
-         '--zstd-archive', str(a.zstd_archive)])
+    launcher_cmd = [sys.executable, str(HERE / 'build_launcher.py'), '--module', str(out / 'module'),
+                    '--kernel', str(out / 'zImage'),
+                    '--public-initramfs', str(out / 'public-initramfs.cpio.gz'), '--cmdline', str(out / 'cmdline.txt'),
+                    '--preinit-conf', str(out / 'pw3-preinit.conf'), '--data', a.data, '--name', a.name,
+                    '--title', a.title, '--output', str(out / 'launcher'),
+                    '--installer', str(a.installer), '--screens', str(a.screens),
+                    '--system-image', str(a.export / 'system.raw.img'), '--ca-bundle', str(a.ca_bundle),
+                    '--zstd-archive', str(a.zstd_archive)]
+    if a.offline_only:
+        launcher_cmd.append('--offline-only')
+    else:
+        launcher_cmd += [arg for u in a.release_url for arg in ('--release-url', u)]
+    run(launcher_cmd)
 
     result = {'schema': 3, 'entry': 'release', 'launcher': 'launcher/' + a.name,
               'export_receipt_sha256': sha((a.export / 'build-result.json').read_bytes()),

@@ -1358,6 +1358,11 @@ static enum inst_code install_system(struct run *r)
 			    r->documents_payload);
 	if (in_documents == (int64_t)rel->payload.bytes) {
 		payload = r->documents_payload;
+	} else if (in_documents > 0 && rel->offline_only) {
+		return stop(r, INST_E_PAYLOAD_BAD, 0,
+			    "%s is %lld bytes; offline entry expects %llu (exact name and size)",
+			    r->documents_payload, (long long)in_documents,
+			    (unsigned long long)rel->payload.bytes);
 	} else {
 		const int64_t downloaded = file_size(r->download_payload);
 		if (downloaded == FILE_UNREADABLE)
@@ -1365,8 +1370,17 @@ static enum inst_code install_system(struct run *r)
 				    r->download_payload);
 		if (downloaded == (int64_t)rel->payload.bytes)
 			payload = r->download_payload;
+		else if (downloaded > 0 && rel->offline_only)
+			return stop(r, INST_E_PAYLOAD_BAD, 0,
+				    "%s is %lld bytes; offline entry expects %llu",
+				    r->download_payload, (long long)downloaded,
+				    (unsigned long long)rel->payload.bytes);
 	}
 	if (!payload) {
+		if (rel->offline_only)
+			return stop(r, INST_E_RELEASE, 0,
+				    "offline entry: copy %s into documents/ (exact name and size %llu); no download",
+				    rel->payload_name, (unsigned long long)rel->payload.bytes);
 		enum inst_code c = download(r);
 		if (c)
 			return c;
@@ -1770,13 +1784,27 @@ static enum inst_code ensure(struct run *r)
 			return stop(r, INST_E_IO, errno, "cannot read the size of the payload in documents");
 		if (here == (int64_t)rel->payload.bytes) {
 			payload = r->documents_payload;
+		} else if (here > 0 && rel->offline_only) {
+			return stop(r, INST_E_PAYLOAD_BAD, 0,
+				    "%s is %lld bytes; offline entry expects %llu (exact name and size)",
+				    r->documents_payload, (long long)here,
+				    (unsigned long long)rel->payload.bytes);
 		} else {
 			here = file_size(r->download_payload);
 			if (here == FILE_UNREADABLE)
 				return stop(r, INST_E_IO, errno, "cannot read the size of the payload in download");
 			if (here == (int64_t)rel->payload.bytes)
 				payload = r->download_payload;
+			else if (here > 0 && rel->offline_only)
+				return stop(r, INST_E_PAYLOAD_BAD, 0,
+					    "%s is %lld bytes; offline entry expects %llu",
+					    r->download_payload, (long long)here,
+					    (unsigned long long)rel->payload.bytes);
 		}
+		if (!payload && rel->offline_only)
+			return stop(r, INST_E_RELEASE, 0,
+				    "offline entry: copy %s into documents/ (exact name and size %llu); no download",
+				    rel->payload_name, (unsigned long long)rel->payload.bytes);
 	}
 	/* A part left behind by a server that sent more than the manifest says can
 	 * neither become the payload nor be resumed. Deleting it here rather than in

@@ -87,7 +87,15 @@ struct inst_release {
 	 * hash, and one holding a shorter file is refused by the length (and takes
 	 * only itself out of the running, not the release). */
 	const char *payload_urls[INST_MAX_ORIGINS];
-	int payload_origins;		/* how many of payload_urls are set, 1 or more */
+	/* How many of payload_urls are set. Online releases: 1 or more. Offline-only
+	 * experimental entries (USB copy into documents/): 0, with offline_only set,
+	 * so a missing local payload refuses before any network attempt. */
+	int payload_origins;
+	/* When non-zero: never download. The system payload must already sit in
+	 * documents/<payload_name> (or android/download/) with the exact byte
+	 * length in `payload.bytes`; wrong size or absence is refused. Hash is
+	 * still checked on unpack. Does not weaken model/firmware/space gates. */
+	int offline_only;
 	struct inst_image payload;
 	struct inst_image system;	/* what the payload unpacks to */
 	const unsigned char *template_data;	/* the empty data image, zstd */

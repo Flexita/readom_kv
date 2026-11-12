@@ -194,6 +194,11 @@ sudo chroot /srv/aosp-x86 /usr/sbin/runuser -u builder -- /bin/bash -lc '
   else
     bash /port/tools/start-native-jack.sh
   fi
+  # Host dex2oat (dex2oatd) aborts with "ANDROID_DATA not set and /data does not
+  # exist" when compiling oat files during systemimage. The lima/QEMU path often
+  # has /data; this amd64 chroot does not. Point ART at a writable temp tree.
+  export ANDROID_DATA="${ANDROID_DATA:-/tmp/android-data}"
+  mkdir -p "$ANDROID_DATA"
   # Before lunch: it reads the product makefiles, and pw3.mk needs the keys for a user build.
   if [[ -n "$3" ]]; then export PW3_RELEASE_KEY_DIR="$3"; fi
   source build/envsetup.sh

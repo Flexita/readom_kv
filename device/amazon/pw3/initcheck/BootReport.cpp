@@ -160,7 +160,8 @@ void Inputs() {
             if (++checked > 32) break;
             const auto label = Read("/sys/class/input/" + name + "/device/name");
             power |= label == "max77696-onkey\n";
-            touch |= label == "cyttsp4_mt\n";
+            /* Same digitizer names as InitCheck.cpp CheckInterfaces(). */
+            touch |= label == "cyttsp4_mt\n" || label == "zforce2\n";
         }
         closedir(directory);
     }

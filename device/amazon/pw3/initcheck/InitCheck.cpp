@@ -382,7 +382,13 @@ bool CheckInterfaces() {
                 if (event.compare(0,5,"event")!=0) continue;
                 const auto name=Read("/sys/class/input/"+event+"/device/name");
                 power |= name=="max77696-onkey";
-                touch |= name=="cyttsp4_mt";
+                /* Touch is presence of the model’s loaded digitizer, not a
+                 * synthetic event. PW3 loads cyttsp4_mt; Voyage’s
+                 * init.voyage.hardware.rc loads zforce2 (input name "zforce2",
+                 * ZF_INPUT_NAME). Requiring only cyttsp4_mt left Voyage at
+                 * touch=0 → sys.pw3.init_error=interfaces → powerctl reboot
+                 * (pw3-boot-report.rc) with framework never started. */
+                touch |= name=="cyttsp4_mt" || name=="zforce2";
             }
             closedir(input);
         }

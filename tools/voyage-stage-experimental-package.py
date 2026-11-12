@@ -210,18 +210,75 @@ def module_match(system_modules: Path, kernel_tar: Path) -> dict:
     mismatched = {n: {'system': sys[n], 'kernel_tar': tar_map.get(n)}
                   for n in sys if tar_map.get(n) != sys[n]}
     only_kernel = sorted(set(tar_map) - set(sys))
+    touch_in_system = [n for n in ('zforce2.ko', 'fsr_keypad.ko', 'drv26xx_haptics.ko') if n in sys]
+    cyttsp_in_system = [n for n in sys if n.startswith('cyttsp')]
+    if touch_in_system and not cyttsp_in_system:
+        note = (
+            'Voyage icewine touch set present in system image (%s) and matched '
+            'to kernel tar by sha256. cyttsp4 remains only in the shared kernel '
+            'tar (PW3-shaped) and is not installed into system. Runtime touch '
+            'path on Voyage is still unverified.'
+            % ', '.join(touch_in_system)
+        )
+    elif not touch_in_system:
+        note = (
+            'Voyage touch candidates such as zforce2.ko may be in the kernel tar '
+            'but absent from the staged system image; cyttsp4 is PW3-shaped. '
+            'Runtime touch path on Voyage is unverified.'
+        )
+    else:
+        note = (
+            'Unexpected mix of Voyage touch modules and cyttsp in system: %s'
+            % sorted(sys)
+        )
     return {
         'system_module_count': len(sys),
         'kernel_tar_module_count': len(tar_map),
         'matched_by_sha256': sorted(matched),
         'mismatched': mismatched,
         'in_kernel_tar_not_in_system_image': only_kernel,
-        'note': (
-            'Voyage touch candidates such as zforce2.ko may be in the kernel tar '
-            'but absent from the staged system image; cyttsp4 is PW3-shaped. '
-            'Runtime touch path on Voyage is unverified.'
-        ),
+        'voyage_touch_modules_in_system': touch_in_system,
+        'cyttsp_modules_in_system': cyttsp_in_system,
+        'note': note,
     }
+
+
+def _c_voyage_identity_ready() -> int:
+    """Read dd_voyage_5_13_6.identity_ready from source (not a hardcoded 0)."""
+    text = (PORT / 'boot/devicedata/devicedata.c').read_text()
+    m = re.search(
+        r'const struct dd_profile dd_voyage_5_13_6 = \{(.*?)\n\};',
+        text, re.S)
+    if not m:
+        raise SystemExit('could not parse dd_voyage_5_13_6 from devicedata.c')
+    # Last integer field is identity_ready.
+    fields = [line.strip().rstrip(',') for line in m.group(1).splitlines()
+              if line.strip() and not line.strip().startswith('/*')
+              and not line.strip().startswith('*')]
+    # Keep only value lines (strings or ints), skip pure comments already.
+    values = []
+    for line in fields:
+        if line.startswith('/*') or line.startswith('*'):
+            continue
+        # Strip trailing inline comments.
+        line = re.sub(r'/\*.*?\*/', '', line).strip().rstrip(',')
+        if not line:
+            continue
+        values.append(line)
+    if not values:
+        raise SystemExit('dd_voyage_5_13_6 has no fields')
+    last = values[-1]
+    if last not in ('0', '1'):
+        raise SystemExit('dd_voyage_5_13_6.identity_ready not 0/1: %r' % last)
+    return int(last)
+
+
+def _launcher_accepts_profiles() -> list:
+    text = (PORT / 'boot/build_launcher.py').read_text()
+    m = re.search(r"receipt\['module_profile'\] not in \(([^)]+)\)", text)
+    if not m:
+        return []
+    return [int(x.strip()) for x in m.group(1).split(',') if x.strip().isdigit()]
 
 
 def packaging_blockers(voyage_profile) -> dict:
@@ -235,6 +292,9 @@ def packaging_blockers(voyage_profile) -> dict:
     except SystemExit as e:
         refused = True
         refuse_error = str(e)
+    c_ready = _c_voyage_identity_ready()
+    accepts = _launcher_accepts_profiles()
+    profile_n = voyage_profile.get('module_profile')
     return {
         'refuse_unless_installable': refused,
         'problems': problems,
@@ -242,16 +302,28 @@ def packaging_blockers(voyage_profile) -> dict:
             'installable': voyage_profile.get('installable'),
             'identity_ready': voyage_profile.get('identity_ready'),
             'device_confirmed': voyage_profile.get('device_confirmed'),
+            'experimental_first_test': voyage_profile.get('experimental_first_test'),
+            'experimental_label': voyage_profile.get('experimental_label'),
         },
         'c_side': {
-            'dd_voyage_5_13_6.identity_ready': 0,
-            'helper_install_prepare': 'VOYAGE_INSTALL_BLOCKED / E105 when identity_ready==0',
-            'note': 'JSON flag flips alone cannot hand off; C profile stays empty.',
+            'dd_voyage_5_13_6.identity_ready': c_ready,
+            'helper_install_prepare': (
+                'identity gate open; wrong model → E101; '
+                'identity_ready==0 → E105 / VOYAGE_INSTALL_BLOCKED'
+                if c_ready else
+                'VOYAGE_INSTALL_BLOCKED / E105 when identity_ready==0'
+            ),
+            'note': (
+                'C profile filled from measured Voyage uname/cmdline/wifi paths; '
+                'dd_device_matches rejects PW3 uname fixtures.'
+                if c_ready else
+                'JSON flag flips alone cannot hand off; C profile stays empty.'
+            ),
         },
         'launcher_module_profile': {
-            'voyage_module_profile': voyage_profile.get('module_profile'),
-            'build_launcher_accepts': [1, 2],
-            'blocked': voyage_profile.get('module_profile') == 3,
+            'voyage_module_profile': profile_n,
+            'build_launcher_accepts': accepts,
+            'blocked': profile_n not in accepts,
         },
         'refuse_error_excerpt': (refuse_error or '')[:500],
     }
@@ -444,14 +516,46 @@ def main():
         'product_props_voyage': True,
     }
 
+    next_steps = []
+    if blockers['refuse_unless_installable'] or blockers['problems']:
+        next_steps.append(
+            'refuse_unless_installable still blocks: %s'
+            % (blockers['problems'] or blockers['refuse_error_excerpt'] or 'unknown')
+        )
+    else:
+        next_steps.append(
+            'refuse_unless_installable PASSES under experimental_first_test '
+            '(device_confirmed remains false; not daily-use)'
+        )
+    if blockers['c_side']['dd_voyage_5_13_6.identity_ready'] != 1:
+        next_steps.append(
+            'C dd_voyage_5_13_6.identity_ready==0 → E105 / VOYAGE_INSTALL_BLOCKED'
+        )
+    if blockers['launcher_module_profile']['blocked']:
+        next_steps.append(
+            'build_launcher.py does not accept module_profile %s (accepts %s)'
+            % (blockers['launcher_module_profile']['voyage_module_profile'],
+               blockers['launcher_module_profile']['build_launcher_accepts'])
+        )
+    next_steps.extend([
+        'No owner authorization for filler cleanup or first boot on device',
+        'Wi-Fi / waveform / Voyage touch runtime paths unverified on hardware',
+        'WITH_DEXPREOPT=false: first-boot dexopt duration/RAM unverified',
+        '40s power-hold recovery is Voyage-unverified; prefer USB+stock boot check',
+    ])
+
     manifest = {
         'schema': 1,
         'kind': 'voyage-experimental-staging-NOT-INSTALLABLE',
         'generated_utc': datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'version_label': args.version_label,
-        'installable': False,
-        'identity_ready': False,
-        'device_confirmed': False,
+        # Profile packaging flags (experimental may pass refuse_unless_installable
+        # without device_confirmed). Staging directory itself is still not an
+        # install package — executable_entry_built stays false here.
+        'installable': bool(voyage_profile.get('installable')),
+        'identity_ready': bool(voyage_profile.get('identity_ready')),
+        'device_confirmed': bool(voyage_profile.get('device_confirmed')),
+        'experimental_first_test': bool(voyage_profile.get('experimental_first_test')),
         'executable_entry_built': False,
         'official_payload_names_used': False,
         'product_identity': identity,
@@ -488,15 +592,12 @@ def main():
             'simg2img_sha256': sha_file(args.simg2img),
             'make_ext4fs_sha256': sha_file(args.make_ext4fs),
         },
-        'blocked_next_steps': [
-            'build_entry.py / build_module.py / build_launcher.py refuse without three flags',
-            'C dd_voyage_5_13_6.identity_ready==0 → E105 / VOYAGE_INSTALL_BLOCKED',
-            'No owner authorization for filler cleanup or first boot',
-            'Wi-Fi / waveform / Voyage touch (zforce) paths unverified',
-        ],
+        'blocked_next_steps': next_steps,
         'scope': (
             'Cloud staging + verification only. Not a Kindle install package. '
-            'Not a boot proof. Not authorized for deployment.'
+            'Not a boot proof. Not authorized for deployment. '
+            'experimental_first_test may allow a separately labeled experimental '
+            'entry build; device_confirmed stays false until a real Voyage Android boot.'
         ),
     }
 

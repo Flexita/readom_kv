@@ -30,8 +30,11 @@
 #ifndef PWS_PROFILE
 #define PWS_PROFILE 0
 #endif
-#if PWS_PROFILE < 0 || PWS_PROFILE > 2
-#error "PWS_PROFILE: 0 = insertion disabled, 1 = pinned stock, 2 = virtual test"
+#if PWS_PROFILE < 0 || PWS_PROFILE > 3
+#error "PWS_PROFILE: 0 = off, 1 = PW3 stock, 2 = virtual test, 3 = Voyage stock"
+#endif
+#if PWS_PROFILE == 1 || PWS_PROFILE == 3
+#define PWS_PHYSICAL 1
 #endif
 #if !defined(CONFIG_ARM) || defined(CONFIG_SMP) || PAGE_SHIFT != 12
 #error "Only UP ARM32 with 4 KiB pages is supported"
@@ -535,10 +538,10 @@ static int __init stage_init(void)
 #elif PWS_PROFILE == 2
     if(!strstr(u->release,"-pw3-core-smoke") || PHYS_OFFSET!=0x60000000)return -ENOEXEC;
 #elif PWS_PROFILE == 3
-    /* Voyage profile with no measured identity. Do not fall through into
-     * native_init, and do not reuse the Paperwhite version string above. */
-    (void)u;
-    return -EPERM;
+    /* Voyage 5.13.6 measured uname (not the Paperwhite version string). */
+    if(strcmp(u->release,"3.0.35-lab126") ||
+       strcmp(u->version,"#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021") ||
+       strcmp(u->machine,"armv7l") || PHYS_OFFSET!=0x80000000)return -ENOEXEC;
 #else
 #error "Unknown handoff profile"
 #endif

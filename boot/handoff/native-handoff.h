@@ -2,8 +2,11 @@
 #ifndef PW3_CONTROLLED_HANDOFF
 #error "Explicit controlled-candidate build required"
 #endif
-#if PWS_PROFILE != 1 && PWS_PROFILE != 2
+#if PWS_PROFILE != 1 && PWS_PROFILE != 2 && PWS_PROFILE != 3
 #error "Pinned physical or virtual profile required"
+#endif
+#if PWS_PROFILE == 1 || PWS_PROFILE == 3
+#define PWS_PHYSICAL 1
 #endif
 #include <linux/io.h>
 #include <linux/suspend.h>
@@ -26,7 +29,7 @@ static struct cache_backend native_backend;
 #if PWS_PROFILE == 2
 static void *native_stack;
 #endif
-#if PWS_PROFILE == 1
+#ifdef PWS_PHYSICAL
 static void __iomem *native_ccm,*native_dcp,*native_usb;
 #endif
 static int native_commit;
@@ -36,7 +39,7 @@ module_param(native_test_reject,int,0600);
 static int native_test_stack;
 module_param(native_test_stack,int,0600);
 #endif
-#if PWS_PROFILE == 1
+#ifdef PWS_PHYSICAL
 static ssize_t (*native_show_pm_test)(struct kobject *,struct kobj_attribute *,char *);
 static int native_mode_core(void)
 {
@@ -101,7 +104,7 @@ static int native_sample(void)
     __asm__ volatile("mrc p15,0,%0,c3,c0,0":"=r"(dacr));
     native_report.irq_fiq_masked=(cpsr&0xff)==0xd3;
     native_report.cpu_profile_valid=native_report.irq_fiq_masked && pw3_identity_profile(sctlr,prrr,nmrr) && !ttbcr && (sctlr&0x1005)==0x1005 && !(sctlr&0x22000000) && (dacr&3)==1;
-#if PWS_PROFILE == 1
+#ifdef PWS_PHYSICAL
     native_report.cpu_profile_valid&=midr==0x412fc09au && prrr==0x000a81a8u && nmrr==0x40e040e0u;
     for(i=0;i<7;i++)ccgr[i]=readl(native_ccm+0x68+i*4);
     ctrl=readl(native_dcp);
@@ -202,7 +205,7 @@ static int native_init(void)
 {
     BUILD_BUG_ON(sizeof(struct pws_native_report)!=260);
     if(__machine_arch_type!=TARGET_MACHINE)return -ENOEXEC;
-#if PWS_PROFILE == 1
+#ifdef PWS_PHYSICAL
     {
         SHA256_CTX hash;u8 actual[32];
         native_show_pm_test=(void *)kallsyms_lookup_name("pm_test_show");
@@ -224,7 +227,7 @@ static int native_init(void)
     if(!native_ccm || !native_dcp || !native_usb){if(native_ccm)iounmap(native_ccm);if(native_dcp)iounmap(native_dcp);if(native_usb)iounmap(native_usb);return -ENOMEM;}
 #endif
     if(!mutex_trylock(&pm_mutex)){
-#if PWS_PROFILE == 1
+#ifdef PWS_PHYSICAL
         iounmap(native_ccm);iounmap(native_dcp);iounmap(native_usb);
 #endif
         return -EBUSY;
@@ -234,7 +237,7 @@ static int native_init(void)
 static void native_exit(void)
 {
     mutex_lock(&pm_mutex);unregister_syscore_ops(&native_ops);mutex_unlock(&pm_mutex);
-#if PWS_PROFILE == 1
+#ifdef PWS_PHYSICAL
     iounmap(native_ccm);iounmap(native_dcp);iounmap(native_usb);
 #endif
 }

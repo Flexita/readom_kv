@@ -32,6 +32,8 @@ BOARD_CONFIG = PORT / 'device/amazon/pw3/BoardConfig.mk'
 # here, and the labels it gives them. The x86 host binaries run in the arm VM under its
 # interpreter, as they do in the build.
 AOSP_OUT = Path('/home/builder/android-src/out')
+# Default product is pw3 (release path). Voyage experimental packaging passes
+# --product pointing at out/target/product/voyage (same BoardConfig data budget).
 PRODUCT = AOSP_OUT / 'target/product/pw3'
 MAKE_EXT4FS = AOSP_OUT / 'host/linux-x86/bin/make_ext4fs'
 FILE_CONTEXTS = PRODUCT / 'obj/ETC/file_contexts.bin_intermediates/file_contexts.bin'
@@ -122,9 +124,19 @@ def main():
     ap.add_argument('--data-format', type=int, required=True)
     ap.add_argument('--version', required=True)
     ap.add_argument('--output', type=Path, required=True)
+    ap.add_argument('--product', type=Path, default=None,
+                    help='AOSP product tree for make_ext4fs labels (default: pw3; voyage experimental uses voyage)')
+    ap.add_argument('--make-ext4fs', type=Path, default=None,
+                    help='Host make_ext4fs binary (default: under /home/builder/android-src/out)')
     a = ap.parse_args()
     if platform.node() != 'lima-pw3' or os.geteuid() == 0:
         sys.exit('Run as the builder in the build VM.')
+    global PRODUCT, MAKE_EXT4FS, FILE_CONTEXTS
+    if a.product is not None:
+        PRODUCT = a.product.resolve()
+        FILE_CONTEXTS = PRODUCT / 'obj/ETC/file_contexts.bin_intermediates/file_contexts.bin'
+    if a.make_ext4fs is not None:
+        MAKE_EXT4FS = a.make_ext4fs.resolve()
     export = json.loads((a.export / 'build-result.json').read_text())
     system = a.export / 'system.raw.img'
     if sha_file(system) != export['files']['system.raw.img']['sha256']:
@@ -140,6 +152,10 @@ def main():
     packed_system = a.output / ('readom-system-%s.img.zst' % a.version)
     packed_data = a.output / ('readom-data-%s.img.zst' % a.version)
     raw_data = a.output / ('readom-data-%s.img' % a.version)
+    # Installer asset names stay readom-*; experimental versions must carry
+    # "experimental" / "unverified" so they cannot be mistaken for a stable tag.
+    if export.get('experimental') and 'experimental' not in a.version.lower():
+        sys.exit('experimental export requires an experimental version label')
     empty_data_image(raw_data, data_bytes())
     compress(system, packed_system)
     compress(raw_data, packed_data)
@@ -150,6 +166,8 @@ def main():
         # with the one it recorded for the system now installed, and only a difference
         # means Android will compile the applications in /data again.
         'boot_image_sha256': export['boot_image']['sha256'],
+        'experimental': bool(export.get('experimental')),
+        'device_confirmed': False if export.get('experimental') else None,
         'files': {
             'system': entry(packed_system, system, export['files']['system.raw.img']['sha256']),
             'data': entry(packed_data, raw_data, sha_file(raw_data)),

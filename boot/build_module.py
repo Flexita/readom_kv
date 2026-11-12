@@ -104,7 +104,8 @@ def main():
     for name in SOURCES:
         shutil.copyfile(HERE / 'handoff' / name, work / name)
     (work / 'target-lock.h').write_text(target_lock(profile, kernel, public, cmdline, envelope))
-    stock = profile['module_profile'] == 1
+    # Profile 1 (PW3) and 3 (Voyage) are physical Kindle handoff; only 2 is QEMU.
+    stock = profile['module_profile'] in (1, 3)
     make = 'obj-m := pw3_first_kernel.o' + ('' if stock else ' pw3_qemu_pm.o') + '\n'
     make += 'pw3_first_kernel-y := stage.o sha256.o pw3_plan.o backend.o transition.o cache-ops.o' + ('' if stock else ' stack.o') + '\n'
     if not stock:

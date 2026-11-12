@@ -199,6 +199,14 @@ sudo chroot /srv/aosp-x86 /usr/sbin/runuser -u builder -- /bin/bash -lc '
   # has /data; this amd64 chroot does not. Point ART at a writable temp tree.
   export ANDROID_DATA="${ANDROID_DATA:-/tmp/android-data}"
   mkdir -p "$ANDROID_DATA"
+  # On native amd64 hosts, host dex2oatd cannot MAP_FIXED the ARM boot.art at its
+  # preferred address (Failed to mmap … instead of 0x7039b000). Skip host
+  # dexpreopt so systemimage can finish; on-device compile stays unverified.
+  # lima/QEMU ARM64 builds keep the default WITH_DEXPREOPT path.
+  dexpreopt_make=()
+  if [[ "$(uname -m)" == x86_64 ]]; then
+    dexpreopt_make=(WITH_DEXPREOPT=false)
+  fi
   # Before lunch: it reads the product makefiles, and pw3.mk needs the keys for a user build.
   if [[ -n "$3" ]]; then export PW3_RELEASE_KEY_DIR="$3"; fi
   source build/envsetup.sh
@@ -232,15 +240,15 @@ sudo chroot /srv/aosp-x86 /usr/sbin/runuser -u builder -- /bin/bash -lc '
   rm -f out/target/product/$product/root/default.prop
   # Package exclusions must not leave obsolete APKs in the staged system tree.
   # The supported target clears install outputs while retaining compiled objects.
-  if [[ "${1:-0}" == 1 ]]; then make -j6 installclean; fi
+  if [[ "${1:-0}" == 1 ]]; then make -j6 "${dexpreopt_make[@]}" installclean; fi
   # Verify the boot entry, USB daemon/helper and full SELinux policy first.
-  make -j6 init adbd pw3-testfile-init pw3-init-check pw3-usb-check sepolicy
-  make -j6 systemimage
+  make -j6 "${dexpreopt_make[@]}" init adbd pw3-testfile-init pw3-init-check pw3-usb-check sepolicy
+  make -j6 "${dexpreopt_make[@]}" systemimage
   # Android 8.1 mkbootfs reads the staged system fs_config_files, but the ramdisk
   # upstream dependency list does not include it. Regenerate this reproducible
   # output after staging system so root-entry permissions cannot stay stale.
   rm -f out/target/product/$product/ramdisk.img
-  make -j6 ramdisk
+  make -j6 "${dexpreopt_make[@]}" ramdisk
   # Which module made each file of the image. A release has to hand out the source
   # of every copyleft file in it (collect-copyleft-sources.py), and the only thing
   # that says which module a file came from is this one; it has to come from the
@@ -253,7 +261,7 @@ sudo chroot /srv/aosp-x86 /usr/sbin/runuser -u builder -- /bin/bash -lc '
   # one left by an earlier build is never rewritten. The copy this found was a
   # week old, which is how collect-copyleft-sources.py came to refuse it.
   rm -f out/target/product/$product/module-info.json
-  make -j6 out/target/product/$product/module-info.json
+  make -j6 "${dexpreopt_make[@]}" out/target/product/$product/module-info.json
 ' pw3-aosp-build "$pw3_installclean" "$pw3_variant" "$pw3_keys" "$pw3_datetime" "$pw3_version" "${PW3_AOSP_PRODUCT:-pw3}"
 
 # Written only after a build that cleared the staged tree, and only once that

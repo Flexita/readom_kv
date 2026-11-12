@@ -38,6 +38,12 @@ def main():
                     help='optional replacement entry (new rebuild); keeps payload')
     ap.add_argument('--part-bytes', type=int, default=DEFAULT_PART,
                     help='volume size in bytes (default 4 MiB for CopyFromBox)')
+    ap.add_argument('--host-test-results', type=Path,
+                    help='frozen HOST-TEST-RESULTS.txt; installed before final SHA256SUMS')
+    ap.add_argument('--doc', action='append', default=[],
+                    help='REL_IN_KIT=SOURCE_PATH installed before final SHA256SUMS')
+    ap.add_argument('--seal-evidence-out', type=Path,
+                    help='if set, seal via voyage_usb_kit_seal (SUMS last + preflight)')
     args = ap.parse_args()
     if args.part_bytes < MIB or args.part_bytes >= 128 * MIB:
         raise SystemExit('--part-bytes must be in [1MiB, 128MiB)')
@@ -259,15 +265,40 @@ echo "Copy both files from $OUTDIR/documents/ into the Kindle drive documents/ f
             'device_confirmed=false. Reassemble payload before copying to Kindle.\n'
         )
 
-    sums = []
-    for path in sorted(out.rglob('*')):
-        if path.is_file() and path.name != 'SHA256SUMS':
-            sums.append('%s  %s' % (sha_file(path), path.relative_to(out).as_posix()))
-    (out / 'SHA256SUMS').write_text('\n'.join(sums) + '\n')
+    frozen: dict = {}
+    if args.host_test_results:
+        frozen['HOST-TEST-RESULTS.txt'] = args.host_test_results
+    for item in args.doc:
+        if '=' not in item:
+            raise SystemExit('--doc needs REL=SOURCE, got %r' % item)
+        rel, src = item.split('=', 1)
+        frozen[rel] = Path(src)
 
-    # Verify
-    import subprocess
-    subprocess.run(['sh', str(out / 'HOST-PREFLIGHT.sh')], check=True, cwd=str(out))
+    # Final mutation order: frozen docs (if any) → SHA256SUMS → preflight.
+    # Never rewrite HOST-TEST-RESULTS after this; re-seal with voyage-seal-usb-kit.py.
+    if args.seal_evidence_out or frozen:
+        from voyage_usb_kit_seal import seal_kit
+        evidence = seal_kit(
+            out,
+            frozen or None,
+            run_preflight=True,
+            evidence_out=args.seal_evidence_out,
+        )
+        seal_info = {
+            'sha256sums_sha256': evidence['sha256sums_sha256'],
+            'host_preflight_exit': evidence.get('host_preflight', {}).get('exit'),
+            'frozen_docs_installed': evidence.get('frozen_docs_installed'),
+        }
+    else:
+        sums = []
+        for path in sorted(out.rglob('*')):
+            if path.is_file() and path.name != 'SHA256SUMS':
+                sums.append('%s  %s' % (sha_file(path), path.relative_to(out).as_posix()))
+        (out / 'SHA256SUMS').write_text('\n'.join(sums) + '\n')
+        import subprocess
+        subprocess.run(['sh', str(out / 'HOST-PREFLIGHT.sh')], check=True, cwd=str(out))
+        seal_info = {'sha256sums_sha256': sha_file(out / 'SHA256SUMS')}
+
     print(json.dumps({
         'output': str(out),
         'entry_sha256': entry_sha,
@@ -275,6 +306,7 @@ echo "Copy both files from $OUTDIR/documents/ into the Kindle drive documents/ f
         'payload_sha256': pay_sha,
         'payload_bytes': pay_bytes,
         'volumes': split_meta['volumes'],
+        'seal': seal_info,
     }, indent=2))
 
 

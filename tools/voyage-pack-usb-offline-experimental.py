@@ -51,6 +51,10 @@ def main():
     ap.add_argument('--entry-build-result', type=Path, required=True)
     ap.add_argument('--output', type=Path, required=True)
     ap.add_argument('--entry-name', default='VoyageExperimental-offline.sh')
+    ap.add_argument('--host-test-results', type=Path,
+                    help='frozen HOST-TEST-RESULTS.txt; installed before final SHA256SUMS')
+    ap.add_argument('--seal-evidence-out', type=Path,
+                    help='optional seal evidence JSON (outside kit); enforces SUMS-last order')
     args = ap.parse_args()
 
     if platform.node() != 'lima-pw3' or os.geteuid() == 0:
@@ -321,14 +325,33 @@ PY
 ''' )
     preflight.chmod(0o755)
 
-    # Refresh SHA256SUMS to include README/preflight/audit
-    sums = []
-    for path in sorted(out.rglob('*')):
-        if path.is_file() and path.name != 'SHA256SUMS':
-            sums.append('%s  %s' % (sha_file(path), path.relative_to(out).as_posix()))
-    (out / 'SHA256SUMS').write_text('\n'.join(sums) + '\n')
+    # Final order: optional frozen host-test → SHA256SUMS → preflight.
+    # Do not rewrite HOST-TEST-RESULTS after this; use voyage-seal-usb-kit.py.
+    frozen = {}
+    if args.host_test_results:
+        frozen['HOST-TEST-RESULTS.txt'] = args.host_test_results
+    if frozen or args.seal_evidence_out:
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from voyage_usb_kit_seal import seal_kit
+        evidence = seal_kit(
+            out,
+            frozen or None,
+            run_preflight=True,
+            evidence_out=args.seal_evidence_out,
+        )
+        seal_info = {
+            'sha256sums_sha256': evidence['sha256sums_sha256'],
+            'host_preflight_exit': evidence.get('host_preflight', {}).get('exit'),
+        }
+    else:
+        sums = []
+        for path in sorted(out.rglob('*')):
+            if path.is_file() and path.name != 'SHA256SUMS':
+                sums.append('%s  %s' % (sha_file(path), path.relative_to(out).as_posix()))
+        (out / 'SHA256SUMS').write_text('\n'.join(sums) + '\n')
+        subprocess.run(['sh', str(preflight)], check=True, cwd=str(out))
+        seal_info = {'sha256sums_sha256': sha_file(out / 'SHA256SUMS')}
 
-    subprocess.run(['sh', str(preflight)], check=True, cwd=str(out))
     print(json.dumps({
         'output': str(out),
         'entry': args.entry_name,
@@ -338,6 +361,7 @@ PY
         'free_before_copy_mib': audit['fat_space_bytes']['free_before_copy_mib'],
         'free_after_copy_mib': audit['fat_space_bytes']['free_after_copy_mib'],
         'offline_only': True,
+        'seal': seal_info,
     }, indent=2))
 
 

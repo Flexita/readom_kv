@@ -76,19 +76,18 @@ So `profile.machine = 4091` is a **source-proven build pin**, not a `/proc` read
 
 ## Android image build status (measured on this cloud host)
 
-Project scripts assume Lima hostname `lima-pw3` plus a Jammy x86 chroot (`CONTRIBUTING.md`: a one-shot Linux host build is not done). This cloud host is x86_64 Ubuntu 24.04:
+Scripts assume hostname `lima-pw3` plus a Jammy x86 chroot. This cloud host is x86_64; hostname was set to `lima-pw3` for gates, and an **amd64 Jack** path was added (upstream scripts assume ARM64 lima + QEMU). Nothing is checked out to the Mac.
 
 | Item | Measured |
 |---|---|
-| Disk | ~244 GiB free; enough for a shallow AOSP tree |
-| Memory | 15 GiB reported, ~10 GiB ballooned, no swap; a full `m` may be tight |
-| OpenJDK 8 | installed |
-| python2.7 | **absent from the distro** (Noble removed it); the documented chroot path still needs Jammy for python2.7 |
-| `repo init -b android-8.1.0_r81` | **succeeded** under `/home/ubuntu/android-src` |
-| `repo sync` | **in progress** (cloud only; nothing checked out to the Mac) |
-| `run-aosp-build-job.sh` | still requires `hostname=lima-pw3` and `/srv/aosp-x86`; **not bypassed**; no compile completed |
-| Artifacts | no Voyage `system.img`; status = **prep / syncing**, not compiled, not bootable |
+| Disk / RAM / CPU | ~200 GiB free; 15 GiB RAM; 4 cores — full AOSP runs, slowly |
+| AOSP `android-8.1.0_r81` sync | **complete** (~39G, 580 projects) |
+| Jammy chroot + python2.7 + Go 1.10.8 | **ready** |
+| `cross_compiler.archive_sha256` | original lima archive **not reconstructible** from public git/googlesource; using locked revision `0390252` via revision-matched toolchain (`materialize-cross-compiler-from-git.sh`) |
+| Voyage `android-core` kernel | **compiled** `3.0.35-lab126-voyage-android81`; `prepare-kernel-hardware` exported (`device_runtime_verified=false`) |
+| `voyage-userdebug` systemimage | **compiling** (experimental/unverified; log `voyage-aosp-system-build.log`) |
+| Artifacts | no finished Voyage `system.img` yet; **not bootable**; must not mark installable |
 
 ## Gates
 
-`installable` / `identity_ready` / `device_confirmed` stay false. They stay closed without a reliable `bootmode=main` reading, a Voyage image, owner-confirmed free space, and an explicit first-boot authorization.
+`installable` / `identity_ready` / `device_confirmed` stay false without `bootmode=main`, a finished Voyage image, owner-confirmed free-space cleanup, and explicit first-boot authorization. A PW3 image must not stand in.

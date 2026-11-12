@@ -91,10 +91,17 @@ pw3_version=${PW3_BUILD_VERSION:-}
 mkdir -p /home/builder/pw3-build
 exec 9>/home/builder/pw3-build/aosp-build.lock
 flock -n 9 || { echo 'Another AOSP build is active; source copy was not changed.' >&2; exit 1; }
-bash /mnt/port/tools/provision-native-jack.sh
+# lima-pw3 is historically ARM64 (QEMU-user AOSP + native Jack). This cloud
+# builder is x86_64: use the amd64 OpenJDK Jack path instead.
+if [[ "$(uname -m)" == x86_64 ]]; then
+  bash /mnt/port/tools/provision-host-jack-amd64.sh
+else
+  bash /mnt/port/tools/provision-native-jack.sh
+fi
 bash /mnt/port/tools/provision-native-clang.sh
 bash /mnt/port/tools/prepare-aosp-device.sh
 src=/home/builder/android-src
+mkdir -p "$src/out"
 # out/.pw3-variant names the variant a tree belongs to; trees from before it were userdebug.
 [[ -f "$src/out/.pw3-variant" ]] || echo userdebug > "$src/out/.pw3-variant"
 current=$(cat "$src/out/.pw3-variant")
@@ -182,11 +189,18 @@ sudo chroot /srv/aosp-x86 /usr/sbin/runuser -u builder -- /bin/bash -lc '
   fi
   export JACK_SERVER_VM_ARGUMENTS="-Dfile.encoding=UTF-8 -XX:+TieredCompilation -Xmx3g"
   export PATH="$JAVA_HOME/bin:$PATH"
-  bash /port/tools/start-native-jack.sh
+  if [[ "$(uname -m)" == x86_64 ]]; then
+    bash /port/tools/start-host-jack-amd64.sh
+  else
+    bash /port/tools/start-native-jack.sh
+  fi
   # Before lunch: it reads the product makefiles, and pw3.mk needs the keys for a user build.
   if [[ -n "$3" ]]; then export PW3_RELEASE_KEY_DIR="$3"; fi
   source build/envsetup.sh
-  lunch "pw3-$2"
+  # PW3_AOSP_PRODUCT selects lunch; default remains pw3. Voyage is experimental
+  # and still inherits device/amazon/pw3 — not a claim of device boot.
+  lunch "${6:-pw3}-$2"
+  product="${6:-pw3}"
   # Native host javac avoids the very slow emulated JVM bootstrap. Keep java
   # itself on the original x86 JDK for AOSP tools with x86 JNI dependencies.
   export PATH="/opt/pw3-java-tools:$PATH"
@@ -209,8 +223,8 @@ sudo chroot /srv/aosp-x86 /usr/sbin/runuser -u builder -- /bin/bash -lc '
   # Only build.prop reads this one, so it is not part of either point above; it
   # is exported here with the others so that kati sees all three at once.
   if [[ -n "$5" ]]; then export BUILD_DISPLAY_ID="$5"; fi
-  rm -f out/target/product/pw3/obj/ETC/system_build_prop_intermediates/build.prop
-  rm -f out/target/product/pw3/root/default.prop
+  rm -f out/target/product/$product/obj/ETC/system_build_prop_intermediates/build.prop
+  rm -f out/target/product/$product/root/default.prop
   # Package exclusions must not leave obsolete APKs in the staged system tree.
   # The supported target clears install outputs while retaining compiled objects.
   if [[ "${1:-0}" == 1 ]]; then make -j6 installclean; fi
@@ -220,7 +234,7 @@ sudo chroot /srv/aosp-x86 /usr/sbin/runuser -u builder -- /bin/bash -lc '
   # Android 8.1 mkbootfs reads the staged system fs_config_files, but the ramdisk
   # upstream dependency list does not include it. Regenerate this reproducible
   # output after staging system so root-entry permissions cannot stay stale.
-  rm -f out/target/product/pw3/ramdisk.img
+  rm -f out/target/product/$product/ramdisk.img
   make -j6 ramdisk
   # Which module made each file of the image. A release has to hand out the source
   # of every copyleft file in it (collect-copyleft-sources.py), and the only thing
@@ -233,9 +247,9 @@ sudo chroot /srv/aosp-x86 /usr/sbin/runuser -u builder -- /bin/bash -lc '
   # module-info.mk): make calls the file up to date for as long as it exists, so
   # one left by an earlier build is never rewritten. The copy this found was a
   # week old, which is how collect-copyleft-sources.py came to refuse it.
-  rm -f out/target/product/pw3/module-info.json
-  make -j6 out/target/product/pw3/module-info.json
-' pw3-aosp-build "$pw3_installclean" "$pw3_variant" "$pw3_keys" "$pw3_datetime" "$pw3_version"
+  rm -f out/target/product/$product/module-info.json
+  make -j6 out/target/product/$product/module-info.json
+' pw3-aosp-build "$pw3_installclean" "$pw3_variant" "$pw3_keys" "$pw3_datetime" "$pw3_version" "${PW3_AOSP_PRODUCT:-pw3}"
 
 # Written only after a build that cleared the staged tree, and only once that
 # build succeeded: the stamp says "this tree was staged from these makefiles,

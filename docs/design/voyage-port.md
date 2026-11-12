@@ -78,19 +78,18 @@ ATAG 协议本身不携带 ARM `MACH_TYPE`。该值在进内核时由 bootloader
 
 ## Android 镜像构建状态（云端实测）
 
-项目脚本默认假定 Lima 主机名 `lima-pw3` + Jammy x86 chroot（`CONTRIBUTING.md`：Linux 主机一条龙尚未完成）。本云主机是 x86_64 Ubuntu 24.04：
+项目脚本默认假定主机名 `lima-pw3` + Jammy x86 chroot。本云主机是 x86_64；为过闸临时将 hostname 设为 `lima-pw3`，并增加 **amd64 Jack** 路径（原脚本假定 ARM64 lima + QEMU）。不往 Mac checkout。
 
 | 项 | 实测 |
 |---|---|
-| 磁盘 | 约 244 GiB 可用，够 shallow AOSP |
-| 内存 | 显示 15 GiB，balloon ~10 GiB，无 swap；全量 `m` 可能吃紧 |
-| OpenJDK 8 | 已安装 |
-| python2.7 | **发行版仓库无**（Noble 已移除）——官方 chroot 路径仍要 Jammy 才能装 python2.7 |
-| `repo init -b android-8.1.0_r81` | **已成功**（`/home/ubuntu/android-src`） |
-| `repo sync` | **进行中**（云端，不往 Mac checkout） |
-| `run-aosp-build-job.sh` | 仍硬性要求 `hostname=lima-pw3` 与 `/srv/aosp-x86`；**未改脚本绕过**，也未完成编译 |
-| 产物 | 无 Voyage `system.img`；状态 = **准备/同步中**，不是编译完成，更不是可启动 |
+| 磁盘 / 内存 / CPU | ~200 GiB 可用；15 GiB RAM；4 核——全量 AOSP 可跑，耗时长 |
+| AOSP `android-8.1.0_r81` sync | **完成**（~39G，580 projects） |
+| Jammy chroot + python2.7 + Go 1.10.8 | **就绪** |
+| `cross_compiler.archive_sha256` | 原 lima 打包物**无法从公开 git/googlesource 复现**；改用锁定 revision `0390252` 的 revision-matched 工具链（见 `materialize-cross-compiler-from-git.sh`） |
+| Voyage `android-core` 内核 | **已编译** `3.0.35-lab126-voyage-android81`；`prepare-kernel-hardware` 已导出（`device_runtime_verified=false`） |
+| `voyage-userdebug` systemimage | **编译进行中**（experimental/unverified；日志 `voyage-aosp-system-build.log`） |
+| 产物 | 尚无完成的 Voyage `system.img`；**不是可启动**，不得标 installable |
 
 ## 闸门
 
-`installable` / `identity_ready` / `device_confirmed` 仍为 false。缺 bootmode=`main` 的可靠读数、缺 Voyage 镜像、缺用户确认的空间清理与首次启动授权时，不得打开。
+`installable` / `identity_ready` / `device_confirmed` 仍为 false。缺 bootmode=`main`、缺完成的 Voyage 镜像、缺用户确认的空间清理与首次启动授权时，不得打开。不得用旧 PW3 镜像冒充。

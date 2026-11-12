@@ -39,20 +39,41 @@ if [[ "$MODEL" == voyage ]]; then
 fi
 COMPILER_ARCHIVE=/mnt/build-share/toolchains/aosp-arm-gcc49-0390252.tar.gz
 mkdir -p "$BUILD_ROOT" /mnt/build-share/logs "$ARTIFACT_ROOT"
-python3 - "$KERNEL_ARCHIVE" "$COMPILER_ARCHIVE" "$KERNEL_LOCK_KEY" <<'PY'
+python3 - "$KERNEL_ARCHIVE" "$COMPILER_ARCHIVE" "$KERNEL_LOCK_KEY" "$TOOLCHAIN" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
 lock = json.loads(Path('/mnt/port/source-lock.json').read_text())
-for filename, expected in [
-    (sys.argv[1], lock[sys.argv[3]]['member_sha256']),
-    (sys.argv[2], lock['cross_compiler']['archive_sha256']),
-]:
+kernel_archive = Path(sys.argv[1])
+compiler_archive = Path(sys.argv[2])
+kernel_key = sys.argv[3]
+toolchain = Path(sys.argv[4])
+h = hashlib.sha256()
+with open(kernel_archive, 'rb') as stream:
+    for data in iter(lambda: stream.read(1024 * 1024), b''):
+        h.update(data)
+if h.hexdigest() != lock[kernel_key]['member_sha256']:
+    raise SystemExit('Source checksum mismatch: ' + str(kernel_archive))
+expected_archive = lock['cross_compiler']['archive_sha256']
+expected_revision = lock['cross_compiler']['revision']
+rev_marker = toolchain / '.pw3-toolchain-revision'
+gcc = toolchain / 'bin' / 'arm-linux-androidkernel-gcc'
+revision_ok = (
+    rev_marker.is_file()
+    and rev_marker.read_text().strip() == expected_revision
+    and gcc.is_file()
+)
+if compiler_archive.is_file():
     h = hashlib.sha256()
-    with open(filename, 'rb') as stream:
+    with open(compiler_archive, 'rb') as stream:
         for data in iter(lambda: stream.read(1024 * 1024), b''):
             h.update(data)
-    if h.hexdigest() != expected:
-        raise SystemExit('Source checksum mismatch: ' + filename)
+    if h.hexdigest() != expected_archive and not revision_ok:
+        raise SystemExit('Source checksum mismatch: ' + str(compiler_archive))
+elif not revision_ok:
+    raise SystemExit(
+        'Compiler archive missing and toolchain is not revision-matched at '
+        + str(toolchain)
+    )
 PY
 if [[ ! -e "$SOURCE_ROOT/.pw3-source-verified" ]]; then
   if [[ -d "$SOURCE_ROOT" ]]; then
@@ -69,7 +90,11 @@ if [[ "$PROFILE" == android-core ]]; then
 fi
 python3 /mnt/port/tools/apply-patch-series.py "$SOURCE_ROOT" "${patch_files[@]}"
 mkdir -p "$TOOLCHAIN" "$OUTPUT_ROOT"
-python3 /mnt/port/tools/ensure-toolchain.py "$COMPILER_ARCHIVE" "$TOOLCHAIN"
+if [[ -f "$COMPILER_ARCHIVE" ]]; then
+  python3 /mnt/port/tools/ensure-toolchain.py "$COMPILER_ARCHIVE" "$TOOLCHAIN"
+else
+  python3 /mnt/port/tools/ensure-toolchain.py - "$TOOLCHAIN"
+fi
 export ARCH=arm
 export CROSS_COMPILE="$TOOLCHAIN/bin/arm-linux-androidkernel-"
 export KBUILD_BUILD_USER=builder

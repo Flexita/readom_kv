@@ -9,7 +9,7 @@ on the device at each start and checked by the module against these rules.
 
 Usage: build_module.py PROFILE --kernel ZIMAGE --public-initramfs FILE --cmdline TEXTFILE --output DIR
 """
-import argparse, hashlib, json, os, platform, shutil, subprocess, sys
+import argparse, hashlib, importlib.util, json, os, platform, shutil, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -76,6 +76,10 @@ def main():
     if platform.node() != 'lima-pw3' or os.geteuid() == 0:
         sys.exit('Run as the builder in the build VM (tools/vm.sh shell).')
     profile = json.loads(a.profile.read_text())
+    spec_v = importlib.util.spec_from_file_location('voyage_profile', HERE.parent / 'tools/voyage_profile.py')
+    voyage_profile = importlib.util.module_from_spec(spec_v)
+    spec_v.loader.exec_module(voyage_profile)
+    voyage_profile.refuse_unless_installable(a.profile)
     kernel, public = a.kernel.read_bytes(), a.public_initramfs.read_bytes()
     cmdline = a.cmdline.read_text().rstrip('\n')
     if kernel[0x24:0x28] != bytes.fromhex('18286f01'):

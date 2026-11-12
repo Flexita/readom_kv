@@ -16,6 +16,9 @@ inline unsigned divide255(unsigned value) {
 }
 // The Cortex-A9 does not read ahead on its own for these access patterns;
 // without the hint the loops run at a third of the speed of memcpy.
+// Only the NEON rows call it. A scalar host build warns if the function
+// exists and is never referenced.
+#ifdef PW3_LUMA_NEON
 inline void ahead(const uint8_t* p) {
 #if defined(__GNUC__)
     __builtin_prefetch(p + 256);
@@ -24,6 +27,7 @@ inline void ahead(const uint8_t* p) {
     (void)p;
 #endif
 }
+#endif
 #ifdef PW3_LUMA_NEON
 inline uint8x16_t luma16(const uint8x16x4_t& p, bool bgra) {
     const uint8x8_t first = vdup_n_u8(bgra ? 29 : 77), green = vdup_n_u8(150), third = vdup_n_u8(bgra ? 77 : 29);

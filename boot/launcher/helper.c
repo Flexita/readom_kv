@@ -39,8 +39,13 @@
 #include "screen.h"
 #include "ReportArea.h"
 #endif
-#if CHECK_PROFILE != 1 && CHECK_PROFILE != 2
-#error "Explicit stock or virtual profile required"
+#if CHECK_PROFILE != 1 && CHECK_PROFILE != 2 && CHECK_PROFILE != 3
+#error "Explicit stock, virtual, or blocked Voyage profile required"
+#endif
+#if CHECK_PROFILE == 3
+#define ENTRY_PROFILE dd_voyage_5_13_6
+#else
+#define ENTRY_PROFILE dd_pw3_5_16_2_1_1
 #endif
 /* Where a run writes what it did. The launcher script is given the same two
  * strings (build_launcher.py), and this is the only place either is written
@@ -533,8 +538,12 @@ static void install_prepare(void) {
      * of images written on a device that cannot use them. Before the lock, so
      * that a Kindle this release cannot be installed on is told so rather than
      * having a lock file left on its user store. */
-    struct dd_why why = {{0}, 0};
-    if (dd_device_matches("/", &dd_pw3_5_16_2_1_1, &why)) {
+    struct dd_why why = {0};
+    if (!ENTRY_PROFILE.identity_ready) {
+        fprintf(stderr, "VOYAGE_INSTALL_BLOCKED identity has not been measured\n");
+        stop_now(PW3_SCREEN_E105);
+    }
+    if (dd_device_matches("/", &ENTRY_PROFILE, &why)) {
         fprintf(stderr, "PW3_DEVICE_DATA %s\n", why.text);
         stop_now(why.other_device ? PW3_SCREEN_E101 : PW3_SCREEN_STOPPED);
     }
@@ -619,6 +628,19 @@ int main(int argc, char **argv) {
      * that it was not given in five tries, which on this kernel can be a
      * refused allocation rather than anything about the store. */
     printf("PW3_LOGS_HOLD held=%d\n", pw3_logs_hold(output, argv[1]));
+#if CHECK_PROFILE == 3
+    /* Before the display-binary hash, the module load and install(). Those
+     * belong to a measured device. This profile has none, so the run stops
+     * with nothing written except this log. */
+    puts("VOYAGE_INSTALL_BLOCKED identity has not been measured; no system image was written");
+    fflush(stdout);
+#ifdef PW3_INSTALLER
+    open_screens();
+    stop_now(PW3_SCREEN_E105);
+#else
+    exit(4);
+#endif
+#endif
     /* The counter any earlier tap recorded is read before rotation, not after.
      * Rotation keeps the newest folders by name, and a clock that went back puts
      * the newest run under the smallest name -- so it can delete the very folder
@@ -745,13 +767,13 @@ int main(int argc, char **argv) {
      * appended to the public initramfs (after zero padding to four bytes),
      * then the ATAGs that name the whole initramfs. */
     static const struct dd_build build = {BUILD_CMDLINE, BUILD_PREINIT_CONF, BUILD_DATA_PATH, BUILD_DATA_SIZE};
-    struct dd_buf archive = {0}, atags = {0}; struct dd_why why = {{0}, 0};
-    if (dd_archive("/", &dd_pw3_5_16_2_1_1, &build, &archive, &why)) { device_data_failed(&why, "device_archive"); }
+    struct dd_buf archive = {0}, atags = {0}; struct dd_why why = {0};
+    if (dd_archive("/", &ENTRY_PROFILE, &build, &archive, &why)) { device_data_failed(&why, "device_archive"); }
     static const unsigned char zeros[4];
     const uint32_t padding = (4u - PUBLIC_INITRAMFS_BYTES % 4u) % 4u;
     require(archive.size <= 16u << 20, "device_archive_size");
     const uint32_t initramfs_bytes = PUBLIC_INITRAMFS_BYTES + padding + (uint32_t)archive.size;
-    if (dd_atags("/", &dd_pw3_5_16_2_1_1, BUILD_CMDLINE, INITRD_START, initramfs_bytes, &atags, &why)) { device_data_failed(&why, "device_atags"); }
+    if (dd_atags("/", &ENTRY_PROFILE, BUILD_CMDLINE, INITRD_START, initramfs_bytes, &atags, &why)) { device_data_failed(&why, "device_atags"); }
     const struct piece slots[PWS_SLOTS][3] = {
         {{kernel_payload, KERNEL_BYTES}},
         {{atags.data, (uint32_t)atags.size}},

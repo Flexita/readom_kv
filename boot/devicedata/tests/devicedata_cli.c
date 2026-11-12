@@ -17,7 +17,7 @@ static int save(const char *path, const struct dd_buf *b) {
 
 int main(int argc, char **argv) {
     struct dd_buf out = {0};
-    struct dd_why why = {{0}, 0};
+    struct dd_why why = {0};
     int rc;
     if (argc == 7 && !strcmp(argv[1], "atags")) {
         rc = dd_atags(argv[2], &dd_pw3_5_16_2_1_1, argv[3], (uint32_t)strtoul(argv[4], NULL, 0),

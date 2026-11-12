@@ -57,12 +57,21 @@ def compress(raw, out):
         sys.exit('%s needs a %d byte window; pw3-unpack accepts at most %d' % (out.name, window, WINDOW))
 
 
+def board_setting(name):
+    found = re.search(r'^%s\s*:=\s*(\d+)\s*$' % name, BOARD_CONFIG.read_text(), re.M)
+    if not found:
+        sys.exit('no %s in %s' % (name, BOARD_CONFIG))
+    return int(found.group(1))
+
+
 def data_bytes():
     """The size of the data image, from the configuration the system was built with."""
-    found = re.search(r'^BOARD_USERDATAIMAGE_PARTITION_SIZE\s*:=\s*(\d+)\s*$', BOARD_CONFIG.read_text(), re.M)
-    if not found:
-        sys.exit('no BOARD_USERDATAIMAGE_PARTITION_SIZE in ' + str(BOARD_CONFIG))
-    return int(found.group(1))
+    return board_setting('BOARD_USERDATAIMAGE_PARTITION_SIZE')
+
+
+def data_format():
+    """The format number an entry must pass to --data-format."""
+    return board_setting('PW3_DATA_FORMAT')
 
 
 def empty_data_image(out, size):
@@ -122,6 +131,10 @@ def main():
         sys.exit('system.raw.img is not the exported one')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,47}', a.version) or a.data_format < 1:
         sys.exit('version: ASCII letters, digits, ".", "_", "-" (at most 48); data format: 1 or more')
+    expected = data_format()
+    if a.data_format != expected:
+        sys.exit('--data-format %d does not match PW3_DATA_FORMAT %d in %s'
+                 % (a.data_format, expected, BOARD_CONFIG))
     built = datetime.datetime.strptime(export['built_utc'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
     a.output.mkdir(parents=True, exist_ok=False)
     packed_system = a.output / ('readom-system-%s.img.zst' % a.version)

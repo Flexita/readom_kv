@@ -1,5 +1,8 @@
 {
-  "description": "Kindle Paperwhite 3 (Wario, machine 4091) on stock firmware 5.16.2.1.1: the stock kernel the handoff module loads into, and the physical plan of the jump",
+  "description": "Historical Paperwhite 3 record for firmware 5.16.2.1.1. Not an installable target: tools/voyage_profile.py refuses to build an entry from it. The values stay so the device-data tests and the old handoff notes still have their source. They are not Voyage measurements.",
+  "installable": false,
+  "identity_ready": true,
+  "historical": true,
   "supported_zh": "Kindle Paperwhite 3\uff08\u7b2c 7 \u4ee3\uff0c2015 \u5e74\u6b3e\uff0c\u673a\u8eab\u80cc\u9762\u578b\u53f7 DP75SDI\uff09\uff0c\u56fa\u4ef6 5.16.2.1.1",
   "supported_en": "Kindle Paperwhite (7th generation, 2015; model DP75SDI on the back), firmware 5.16.2.1.1",
   "supported_why": "what the E101 screen tells someone whose Kindle this build refuses (installer/screens/render_screens.py). Amazon's own name for the model, not this project's \"PW3\": the person reading it knows what they bought, not what the board is called. The generation and the year are both there because the model number on the back is shared with the 2013 Paperwhite, and the firmware because the handover runs that kernel's own code (stock_kernel_why)",

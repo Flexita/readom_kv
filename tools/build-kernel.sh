@@ -28,15 +28,22 @@ SOURCE_ROOT="$BUILD_ROOT/linux-$PROFILE"
 OUTPUT_ROOT="$BUILD_ROOT/out-$PROFILE$suffix"
 ARTIFACT_ROOT="/mnt/build-share/$PROFILE-kernel$suffix"
 TOOLCHAIN=/home/builder/toolchains/aosp-arm-gcc49
+KERNEL_LOCK_KEY=kernel
 KERNEL_ARCHIVE=/mnt/kernel-inputs/amazon-5.16.2.1.1/linux-3.0.35.tar.gz
+# Voyage uses its own GPL member. The case above rejects an unknown model, so
+# this branch runs only after tools/build-kernel.sh has a voyage entry.
+if [[ "$MODEL" == voyage ]]; then
+  KERNEL_LOCK_KEY=voyage_kernel
+  KERNEL_ARCHIVE=/mnt/kernel-inputs/amazon-voyage-5.13.6/linux-3.0.35.tar.gz
+fi
 COMPILER_ARCHIVE=/mnt/build-share/toolchains/aosp-arm-gcc49-0390252.tar.gz
 mkdir -p "$BUILD_ROOT" /mnt/build-share/logs "$ARTIFACT_ROOT"
-python3 - "$KERNEL_ARCHIVE" "$COMPILER_ARCHIVE" <<'PY'
+python3 - "$KERNEL_ARCHIVE" "$COMPILER_ARCHIVE" "$KERNEL_LOCK_KEY" <<'PY'
 import hashlib, json, sys
 from pathlib import Path
 lock = json.loads(Path('/mnt/port/source-lock.json').read_text())
 for filename, expected in [
-    (sys.argv[1], lock['kernel']['member_sha256']),
+    (sys.argv[1], lock[sys.argv[3]]['member_sha256']),
     (sys.argv[2], lock['cross_compiler']['archive_sha256']),
 ]:
     h = hashlib.sha256()

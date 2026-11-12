@@ -46,44 +46,55 @@ TARGET_COPY_OUT_VENDOR := system/vendor
 # and the Kindle's own volume gets those 64 MiB back for books -- this device
 # goes from 643.0 MiB free to about 707 MiB.
 BOARD_SYSTEMIMAGE_PARTITION_SIZE := 536870912
-# 1792 MiB (1.75 GiB), set on 2026-10-15 and kept on 2026-11-03 after the two
-# sizes were worked out again against what the device reports. Everything below
-# is `df` on the device on 2026-11-03, with the one application that matters
-# installed, logged in and a book downloaded:
+# 1024 MiB data image. A Voyage probe on 2026-11-12 (root, read-only) measured
+# the chip and the user store separately. mmcblk0 is 7,733,248 sectors of 512
+# bytes (3,959,422,976 bytes), the 4 GB class the owner names; the computer's
+# "about 3.3 GB" is the user store, not the chip and not free space.
+# mmcblk0p4 is 6,385,664 sectors (3,269,459,968 bytes). The mounted FAT
+# (/mnt/us and /mnt/base-us) is 3,188,640 KiB total, the same 3113.9 MiB
+# figure previously known from a PW3, with 71,792 KiB free at the time of
+# the probe. sysfs ro=0 on every mmcblk0 node. That is the block read-only
+# flag. The root filesystem is a separate fact: the command line says ro and
+# / is mounted read-only. The installer writes files on the user FAT only,
+# and only after the identity gate. ro=0 is not permission to write the root
+# or boot partitions, and the mount flag is not a hardware lock.
 #
-#   the Kindle's own volume   3113.9 MiB, of which 643.0 MiB free
-#   /system (576 MiB image)    566.9 MiB, 445.9 MiB used, 79%
-#   /data   (1792 MiB image)  1763.8 MiB, 748.7 MiB used, 43%
+# The previous size was 1792 MiB. On the one PW3 that number was measured
+# against (2026-11-03), /data held 748.7 MiB once WeRead was logged in and one
+# book had been downloaded, and the Kindle volume itself was 3113.9 MiB.
+# 512 + 1792 + 64 MiB of reserve asked for about 2.49 GB free, which on a
+# 3 GB volume leaves almost no room for the Kindle's own books.
 #
-# What fills /data is downloaded books, so the question is not the 43% but what
-# is left: 1015.1 MiB, which is hundreds of books of text. That is what makes
-# this size sufficient, and it is why 1536 MiB was prepared on 2026-11-02 and
-# turned down by the owner on 2026-11-03: it would have taken 256 MiB from the
-# one thing /data is for, to buy room on a volume that already has 643 MiB
-# free.
+# 1024 MiB stays above that 748.7 MiB one-book reading and is the smallest
+# power of two that does. The installer's own check (install.c check_space)
+# is not this sum alone. With nothing already on the volume it asks for
+# max(payload + system, system + data) + 64 MiB. The payload is the compressed
+# system image and is deleted before the data image is written; zstd output
+# goes straight into system.img, with no second file on disk. While the
+# payload is smaller than the data image, the peak is
+# 512 + 1024 + 64 MiB = 1600 MiB. A larger payload would be counted. Bytes
+# already present (a partial download, a system image, a data image of this
+# format and size) are credited. A data image of another size, including the
+# old 1792 MiB one, is refused as E304 and is not treated as free space.
+# The 64 MiB is spare for the stock system, logs and report.bin. It is not a
+# second copy of system.img: a torn write is replaced on the next tap from
+# the payload, and the stock Kindle is what a failed Android returns to.
+# On the measured FAT of 3113.9 MiB with nothing else on it, about 1.51 GiB
+# would remain for Kindle books. The probe's 70 MiB free is far under
+# 1600 MiB, so that device state cannot install. The requirement is not
+# lowered to fit. The 748.7 MiB one-book /data reading is still a PW3 number.
+# The system image stays 512 MiB: the last built image used 452.9 MiB and this
+# tree was not rebuilt, so shrinking the system file would be a lie.
+# Of the 1024 MiB, pw3-storage-floor.sh asks Android to treat the volume as
+# low at 128 MiB free so cache trimming starts before the image is full.
+# That line is in the source only until a system image is built.
 #
-# 2048 MiB was the other candidate -- a power of two, and the two images would
-# then be 2.5 GiB exactly. It was not taken, for two reasons that are both
-# arithmetic: a clean install would need 512 + 2048 + 64 MiB = 2.75 GB of a
-# 3.27 GB volume, so a reader with more than about 465 MB of their own books
-# could not install at all; and 256 MiB more for books that the measurement
-# above says are not needed costs every reader that. The room this version
-# hands back comes out of the system image instead, which is read-only and
-# measured, not guessed: 64 MiB of it, so this device goes from 643.0 MiB free
-# to about 707 MiB.
-#
-# The sizes are 512 MiB and 7 x 256 MiB; together 2304 MiB, which is 9 x 256
-# MiB -- whole steps of a quarter of a GiB, with the read-only one a power of
-# two.
-#
-# A size change here has to go with --data-format (installer/build_payload.py),
-# because an installer keeps an existing data image only of its own format and
-# its own size: a device holding the old one is refused with E304, changes no
-# file, and goes on running the version it has until the reader deletes
-# data.img themselves -- which resets their applications and books. That is why
-# this number moves only in a version that is installed clean anyway, and why
-# it did not move here: an upgrade into this version keeps what the reader has.
-BOARD_USERDATAIMAGE_PARTITION_SIZE := 1879048192
+# Format 2, not 1. An installer keeps a data image only of its own format and
+# size (E304). A 1792 MiB image from the historical PW3 entry is refused
+# rather than mounted. build_payload.py reads PW3_DATA_FORMAT and will not
+# pack a different number.
+BOARD_USERDATAIMAGE_PARTITION_SIZE := 1073741824
+PW3_DATA_FORMAT := 2
 BOARD_FLASH_BLOCK_SIZE := 4096
 # Keep framework and APK dex preparation off the 512 MB target at first boot.
 # The product selects speed compilation only for its core UI applications.

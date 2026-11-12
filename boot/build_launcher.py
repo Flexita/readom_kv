@@ -22,7 +22,7 @@ Usage: build_launcher.py --module DIR --kernel ZIMAGE --public-initramfs FILE --
   --ca-bundle      the CA bundle of source-lock.json "installer_ca_bundle", for the download
   --zstd-archive   the zstd release of source-lock.json "installer_zstd"
 """
-import argparse, base64, hashlib, json, os, platform, re, shutil, subprocess, sys, tarfile
+import argparse, base64, hashlib, importlib.util, json, os, platform, re, shutil, subprocess, sys, tarfile
 import urllib.parse
 from pathlib import Path
 
@@ -230,6 +230,11 @@ def build_incremental(image, expect_sha256):
 
 def installer_inputs(a, conf, data_path, data_size):
     """The release the entry installs: checked against the entry, as C and blobs."""
+    profile_path = HERE / 'profiles/voyage-5.13.6.json'
+    spec_v = importlib.util.spec_from_file_location('voyage_profile', PORT / 'tools/voyage_profile.py')
+    voyage_profile = importlib.util.module_from_spec(spec_v)
+    spec_v.loader.exec_module(voyage_profile)
+    voyage_profile.refuse_unless_installable(profile_path)
     if not (a.screens and a.release_url and a.ca_bundle and a.zstd_archive and a.system_image):
         sys.exit('--installer needs --screens, --system-image, --release-url, --ca-bundle and --zstd-archive')
     lock = json.loads((PORT / 'source-lock.json').read_text())
@@ -258,7 +263,7 @@ def installer_inputs(a, conf, data_path, data_size):
     # E101 names the model and firmware this build is for, and a screen that
     # named another one would send someone looking for the wrong thing. The
     # names come from the profile both sides read (boot/profiles/).
-    profile = json.loads((HERE / 'profiles/pw3-5.16.2.1.1.json').read_text())
+    profile = json.loads(profile_path.read_text())
     if screens.get('supported') != [profile['supported_zh'], profile['supported_en']]:
         sys.exit('the screens were rendered for another model: ' + str(screens.get('supported')))
     # --release-url is the directory the asset sits in; the payload's own name is

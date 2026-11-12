@@ -72,14 +72,15 @@ uImage 头里的加载地址是 `0x80008000`。这是这次编译写进头里的
 
 函数体哈希、完整命令行和运行时机器号到齐之前，不能打包可安装入口，也不能在设备上启动。即便以后到齐，第一次启动 Android 仍是单独的一步，这一轮没有授权。
 
-## 若还要再做一次只读采集
+## 下一次只读采集
 
-上面的报告已经覆盖 eips、uname、System RAM、分区大小和 sysfs `ro`。不要运行 `Readom.sh`，不要登录，不要读内核内存，不要抄序列号、MAC 或 `/proc/board_id`。还缺的只有：
+`tools/voyage-probe-extra.sh` 只问交接代码还缺的项。把它复制成 Kindle 上的 `/mnt/us/RUNME.sh`，弹出 U 盘，在搜索框输入 `;log runme`。它只写 `/mnt/us/voyage-probe-extra.txt`，并在屏幕上写两行短字。不要运行 `Readom.sh`，不要登录，不要读内核内存，不要抄序列号、MAC 或 `/proc/board_id`。
 
-- `log_pos_goal` 和 `ip` 的原值（这次被收成 `[redacted]`）
-- 运行时机器号，若它出现在 `/proc` 的非隐私字段里
-- 各 `mmcblk0p*` 的 `start`，以及用户 FAT 所在 loop 的 `offset` 和 `sizelimit`
-- 与 `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021` 同一份原厂内核文件的四个函数体哈希。公开 `update.bin` 里没有这份明文内核。不要从 `/proc/kcore` 里挖。
+`log_pos_goal` 是 printk 缓冲的物理地址，不是身份字段。脚本只在它是纯数字或 `0x` 加最多 8 位十六进制时才写出。`ip` 只接受 `off`、`none`、`on`、`dhcp`；IP 地址和其他值只留下“已省略”的说明。原始 `/proc/cmdline` 整行不会写入报告。
+
+运行时机器号没有只含这个数字的 proc 文件。`/proc/atags` 同时带着 board id 和 MAC，脚本不读它，也不把源码里的机器号写进去。
+
+公开 `update.bin`（`SP01`，证书号 2，内层 `FB03`，目标版本号 `3731990038`，与固件包名和真机 `version.txt` 里的 `373199` 一致）没有被拆开。KindleTool 的提取是把签名块挪开再解包，并不做 RSA 校验，所以没有运行。四个函数体哈希仍然没有。不要从 `/proc/kcore` 或块设备里挖内核。若根文件系统上有普通文件形式的原厂内核，那是下一步可以讨论的只读文件，这一轮不读。
 
 下面这段是旧的问题清单，其中大部分这次已经回答：
 

@@ -70,14 +70,15 @@ The system image is 512 MiB and the data image is 1024 MiB, format 2. While the 
 
 Until the function-body hashes, the complete command line and the runtime machine id are real readings, an installable entry is not packed and the device is not started. A first Android boot would still be a separate step after that, and this round does not authorize it.
 
-## If another read-only pass is made
+## Next read-only collection
 
-The report above already covers eips, uname, System RAM, partition sizes and sysfs `ro`. Do not run `Readom.sh`, do not sign in, do not read kernel memory, and do not copy a serial, a MAC or `/proc/board_id`. What is still missing:
+`tools/voyage-probe-extra.sh` asks only for the handoff fields that are still empty. Copy it to the Kindle as `/mnt/us/RUNME.sh`, eject, and type `;log runme` in the search box. It writes only `/mnt/us/voyage-probe-extra.txt` and two short lines on the screen. Do not run `Readom.sh`, do not sign in, do not read kernel memory, and do not copy a serial, a MAC or `/proc/board_id`.
 
-- the original values of `log_pos_goal` and `ip` (stored as `[redacted]` this time)
-- the runtime machine id, if it appears in a non-secret `/proc` field
-- `start` for each `mmcblk0p*`, and the loop `offset` and `sizelimit` of the user FAT
-- the four function-body hashes of the stock kernel file that is the `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021` build. The public `update.bin` does not contain that kernel in plaintext. Do not take them from `/proc/kcore`.
+`log_pos_goal` is the physical address of the printk buffer, not an identity field. The script prints it only when it is a plain decimal number or `0x` plus at most eight hex digits. `ip` is kept only for `off`, `none`, `on` or `dhcp`. An IP address or any other value is named as withheld and not printed. The raw `/proc/cmdline` line is not written.
+
+No proc file publishes only the numeric machine id. `/proc/atags` also carries the board id and the MAC, so the script does not read it, and it does not write the mach-types number.
+
+The public `update.bin` (`SP01`, certificate number 2, inner `FB03`, target revision `3731990038`, the same number as the archive name and the `373199` in the device's `version.txt`) was not unpacked. KindleTool's extract moves the signature block aside and unpacks without an RSA check, so it was not run. The four function-body hashes are still absent. Do not take them from `/proc/kcore` or from a block device. A stock kernel that is an ordinary file on the root filesystem would be a later read-only question; it is not read in this round.
 
 The commands below are the older list. Most of them are already answered:
 

@@ -140,6 +140,7 @@ TESTS = [
     ('verify-device-answers', 'python', ['tools/tests/test_verify_device_answers.py'], False),
     ('export-refuses', 'python', ['tools/tests/test_export_refuses.py'], False),
     ('voyage-profile', 'python', ['tools/tests/test_voyage_profile.py'], False),
+    ('voyage-probe-extra', 'python', ['tools/tests/test_voyage_probe_extra.py'], False),
     ('storage-budget', 'python', ['tools/tests/test_storage_budget.py'], False),
     # What a pull request may change (tools/check-pr-scope.py, which CI runs on
     # every pull request): here, on pull requests made for it, half of which it

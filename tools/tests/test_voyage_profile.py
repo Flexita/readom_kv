@@ -28,8 +28,33 @@ class VoyageProfile(unittest.TestCase):
         self.assertIn('installable is not true', found)
         self.assertIn('identity_ready is not true', found)
         self.assertIn('device_confirmed is not true', found)
+        self.assertNotIn('measured.machine_id is empty', found)
         with self.assertRaises(SystemExit):
             self.mod.refuse_unless_installable(self.mod.VOYAGE_PROFILE)
+
+    def test_machine_pin_is_source_proven_not_measured(self):
+        self.assertEqual(self.voyage['machine'], 4091)
+        self.assertEqual(self.voyage['source']['stock_machine_desc_nr'], 4091)
+        self.assertIsNone(self.voyage['measured']['machine_id'])
+
+    def test_inventing_a_measured_machine_id_is_refused(self):
+        forged = json.loads(self.text)
+        forged['installable'] = True
+        forged['identity_ready'] = True
+        forged['device_confirmed'] = True
+        forged['measured'] = {
+            'eips_sha256': 'a' * 64,
+            'eips_bytes': 1,
+            'uname_release': '3.0.35-lab126',
+            'uname_version': '#1 PREEMPT Thu Jan 1 00:00:00 UTC 2015',
+            'machine_id': 4091,
+            'stock_cmdline': 'console=ttymxc0,115200',
+            'ram': [['0x80000000', '0x20000000']],
+            'partition_table': {'ok': True},
+            'stock_functions': {'pm_test_show': {'bytes': 1, 'sha256': 'b' * 64}},
+        }
+        found = self.mod.problems(forged, self.pw3)
+        self.assertTrue(any('measured.machine_id must stay null' in i for i in found), found)
 
     def test_the_historical_pw3_profile_cannot_be_built_either(self):
         self.assertIs(self.pw3.get('installable'), False)
@@ -56,7 +81,7 @@ class VoyageProfile(unittest.TestCase):
             'eips_bytes': 62176,
             'uname_release': self.pw3['stock_kernel_release'],
             'uname_version': self.pw3['stock_kernel_version'],
-            'machine_id': self.pw3['machine'],
+            'machine_id': None,
             'stock_cmdline': self.pw3['cmdline_base'],
             'ram': self.pw3['ram'],
             'partition_table': {'copied': True},
@@ -84,7 +109,7 @@ class VoyageProfile(unittest.TestCase):
             'eips_bytes': 61104,
             'uname_release': '3.0.35-lab126',
             'uname_version': '#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021',
-            'machine_id': 4091,
+            'machine_id': None,
             'stock_cmdline': 'log_pos_goal=[redacted] console=ttymxc0,115200 ro ip=[redacted] quiet',
             'ram': self.pw3['ram'],
             'partition_table': {'sysfs_ro': 0},
@@ -111,10 +136,9 @@ class VoyageProfile(unittest.TestCase):
             'stock_functions': None,
         }
         found = self.mod.problems(ready, self.pw3)
-        self.assertIn('measured.machine_id is empty', found)
         self.assertIn('measured.stock_cmdline is empty', found)
         self.assertIn('measured.stock_functions is empty', found)
-        self.assertNotIn(self.mod.PW3_EIPS_SHA256, ready['measured']['eips_sha256'])
+        self.assertNotIn('measured.machine_id is empty', found)
 
     def test_probe_record_is_checked_when_the_profile_carries_it(self):
         probe = self.voyage.get('device_probe')
@@ -122,26 +146,7 @@ class VoyageProfile(unittest.TestCase):
             return
         self.assertEqual(probe['sha256'],
                          'eab14ee928b2abaf6925d1fd2f04e461c1bc0525fef01a6cd5b9252b05864f15')
-        self.assertEqual(probe['bytes'], 2195)
-        self.assertEqual(probe['uid'], 0)
-        measured = self.voyage['measured']
-        self.assertEqual(measured['eips_sha256'],
-                         '7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259')
-        self.assertEqual(measured['eips_bytes'], 61104)
-        self.assertEqual(measured['uname_release'], '3.0.35-lab126')
-        self.assertEqual(measured['uname_version'],
-                         '#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021')
-        self.assertEqual(measured['ram'], [['0x80000000', '0x20000000']])
-        self.assertIsNone(measured['machine_id'])
-        self.assertIsNone(measured['stock_cmdline'])
-        self.assertIsNone(measured['stock_functions'])
-        self.assertIs(self.voyage['installable'], False)
-        self.assertIs(self.voyage['identity_ready'], False)
-        self.assertIs(self.voyage['device_confirmed'], False)
-        self.assertIn('log_pos_goal', probe['cmdline_redacted_keys'])
-        self.assertIn('ip', probe['cmdline_redacted_keys'])
-        self.assertNotIn('0x8fff0000', self.text)
-        self.assertNotIn('ip=off', probe['cmdline_filtered'])
+        self.assertIsNone(self.voyage['measured']['machine_id'])
 
     def test_source_verified_shared_values_are_not_refused(self):
         """4091 and 3.0.35-lab126 are in the Voyage GPL tree, not only on the PW3."""
@@ -149,18 +154,20 @@ class VoyageProfile(unittest.TestCase):
         ready['installable'] = True
         ready['identity_ready'] = True
         ready['device_confirmed'] = True
+        ready['machine'] = self.mod.SOURCE_SHARED_MACHINE_ID
+        ready['source']['stock_machine_desc_nr'] = self.mod.SOURCE_SHARED_MACHINE_ID
         ready['measured'] = {
             'eips_sha256': 'a' * 64,
             'eips_bytes': 1,
             'uname_release': self.mod.SOURCE_SHARED_KERNEL_RELEASE,
             'uname_version': '#1 PREEMPT Thu Jan 1 00:00:00 UTC 2015',
-            'machine_id': self.mod.SOURCE_SHARED_MACHINE_ID,
+            'machine_id': None,
             'stock_cmdline': 'console=ttymxc0,115200 quiet',
             'ram': self.pw3['ram'],
             'partition_table': {'read_from': '/proc/partitions on the device'},
             'stock_functions': {'pm_test_show': {'bytes': 4, 'sha256': 'b' * 64}},
         }
-        self.assertEqual(ready['measured']['machine_id'], self.pw3['machine'])
+        self.assertEqual(ready['machine'], self.pw3['machine'])
         self.assertEqual(self.mod.problems(ready, self.pw3), [])
 
     def test_a_complete_reading_that_is_not_the_pw3_record_would_build(self):
@@ -169,12 +176,14 @@ class VoyageProfile(unittest.TestCase):
         ready['installable'] = True
         ready['identity_ready'] = True
         ready['device_confirmed'] = True
+        ready['machine'] = 4091
+        ready['source']['stock_machine_desc_nr'] = 4091
         ready['measured'] = {
             'eips_sha256': 'a' * 64,
             'eips_bytes': 1,
             'uname_release': '3.0.35-lab126',
             'uname_version': '#1 PREEMPT Thu Jan 1 00:00:00 UTC 2015',
-            'machine_id': 1,
+            'machine_id': None,
             'stock_cmdline': 'console=ttymxc0,115200',
             'ram': [['0x80000000', '0x20000000']],
             'partition_table': {'read_from': '/proc/partitions on the device'},

@@ -68,8 +68,8 @@ Every `mmcblk0` node's sysfs `ro` is 0. That is the block layer's read-only flag
 
 The system image is 512 MiB and the data image is 1024 MiB, format 2. While the payload is smaller than the data image, the install peak is still **1600 MiB free**. This report's user store had about 70 MiB free, which is not enough, and the requirement is not lowered to fit. The chip is the 4 GB class. About 3.3 GB on USB is the user store's total, not free space. The 512 MB heap settings were not changed.
 
-## Not done, so this is not a boot
+## MACH_TYPE and real first-boot risks
 
-The model branch still lacks a runtime `machine_id`; `identity_ready` / `device_confirmed` / `installable` stay false. Until those open on evidence, an installable entry is not packed and the device is not started. A first Android boot would still be a separate step after that, and this round does not authorize it.
+`MACH_TYPE` **4091** is a source-proven build pin (matching Image `machine_desc.nr` + GPL), not a `/proc` reading; `measured.machine_id` stays null. In the handoff it becomes `TARGET_MACHINE` / transition **r1**; ATAGs do not carry that number.
 
-No ordinary proc file publishes only the machine id. `/proc/atags` also carries the board id and MAC, so it is not read. Expanding collection into boot partitions or memory needs a separate necessity-and-risk note first; it is not done here.
+The real blocks are elsewhere: `dd_atags` requires `/proc/bootmode == main` (last read was empty); user-store free space is far below 1600 MiB (no automatic book deletion); there is no Voyage Android `system.img` yet. `tools/voyage-probe-bootmode.sh` re-reads only bootmode. `identity_ready` / `device_confirmed` / `installable` stay false.

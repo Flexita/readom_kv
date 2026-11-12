@@ -70,8 +70,8 @@ Wi-Fi：飞行模式下模块未加载；`/opt/ar6k/...` 下候选普通文件�
 
 系统镜像 512 MiB，数据镜像 1024 MiB，格式号 2。载荷小于数据镜像时，安装峰值仍是 **1600 MiB 空闲**。这次报告的用户区空闲只有约 70 MiB，不够，门槛不因此降低。芯片是 4 GB 这一档，USB 上大约 3.3 GB 是用户区总量，不是空闲。512 MB 内存上的堆参数没有改。
 
-## 还没做、所以不能说能启动
+## MACH_TYPE 与首次启动风险
 
-机型分支仍缺运行时 `machine_id`；`identity_ready` / `device_confirmed` / `installable` 仍为 false。到齐之前不能打包可安装入口，也不能在设备上启动。即便以后到齐，第一次启动 Android 仍是单独的一步，这一轮没有授权。
+`MACH_TYPE` **4091** 是离线可证的构建钉（匹配 Image 的 `machine_desc.nr` + GPL），不是 `/proc` 实测；`measured.machine_id` 保持 null。交接里它进 `TARGET_MACHINE` / transition **r1**；ATAG 不携带该数字。
 
-没有只发布机器号的普通 proc 文件。`/proc/atags` 同时带着 board id 和 MAC，不读。若要把采集扩大到引导分区或内存：先单独说明必要性与风险，不执行。
+真实阻塞在别处：`dd_atags` 要求 `/proc/bootmode == main`（上次读到空串）；用户区空闲远低于 1600 MiB（不自动删书）；尚无 Voyage Android `system.img`。`tools/voyage-probe-bootmode.sh` 只再读 bootmode。`identity_ready` / `device_confirmed` / `installable` 仍为 false。

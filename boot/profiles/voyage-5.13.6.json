@@ -261,8 +261,9 @@
   ],
   "device_archive_max": 12582912,
   "footprint_profile": "voyage",
-  "module_kernel_source": "/home/builder/pw3-build/linux-android-core",
-  "module_kernel_output": "/home/builder/pw3-build/out-android-core-voyage",
+  "module_kernel_source": "/home/builder/pw3-build/linux-stock",
+  "module_kernel_output": "/home/builder/pw3-build/out-stock-voyage",
+  "module_kernel_why": "Handoff .ko is loaded by init_module into the *stock* Voyage kernel (uname 3.0.35-lab126), not into android-core. Building against out-android-core-voyage stamped vermagic 3.0.35-lab126-voyage-android81 and the stock loader rejected it (init_module errno=8 / ENOEXEC; stock CONFIG_MODVERSIONS is off so vermagic alone fails closed). Same split as PW3: module_kernel_* = stock tree; --kernel zImage remains android-core for the jump payload.",
   "stock_functions": {
     "pm_test_show": {
       "bytes": 124,

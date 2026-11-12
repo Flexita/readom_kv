@@ -121,6 +121,29 @@ def main():
     for name in modules:
         shutil.copyfile(work / (name + '.ko'), a.output / (name + '.ko'))
     shutil.copyfile(work / 'target-lock.h', a.output / 'target-lock.h')
+    # Physical profiles load into the *stock* kernel via init_module. A module
+    # built against android-core (LOCALVERSION …-android81) carries a vermagic
+    # the stock loader refuses with ENOEXEC before stage_init runs. Refuse that
+    # packaging mismatch here rather than on a Kindle.
+    vermagic_by_module = {}
+    if stock:
+        want = profile.get('stock_kernel_release')
+        if not want:
+            sys.exit('physical profile needs stock_kernel_release for vermagic audit')
+        for name in modules:
+            ko = (a.output / (name + '.ko')).read_bytes()
+            marker = b'vermagic='
+            at = ko.find(marker)
+            if at < 0:
+                sys.exit(name + '.ko has no vermagic= string')
+            end = ko.find(b'\0', at)
+            verd = ko[at + len(marker):end if end > at else at + 80].decode('ascii', 'replace')
+            verd_release = verd.split()[0] if verd.split() else ''
+            vermagic_by_module[name] = verd
+            if verd_release != want:
+                sys.exit('%s.ko vermagic release is %r; stock kernel is %r — '
+                         'build against module_kernel_* stock tree, not android-core'
+                         % (name, verd_release, want))
     receipt = {
         'schema': 1, 'profile': profile.get('description'), 'profile_sha256': sha(a.profile.read_bytes()),
         'module_profile': profile['module_profile'],
@@ -132,6 +155,9 @@ def main():
         'target_lock_sha256': sha((a.output / 'target-lock.h').read_bytes()),
         'contains_device_data': False,
     }
+    if vermagic_by_module:
+        receipt['vermagic'] = vermagic_by_module
+        receipt['stock_kernel_release'] = profile['stock_kernel_release']
     (a.output / 'build-result.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps({k: receipt[k] for k in ['module_profile', 'modules_sha256', 'contains_device_data']}, indent=1))
 

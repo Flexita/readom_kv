@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Static Voyage input packaging vs EventHub/InputReader contracts.
 
-Does not claim device hardware behavior. Packed system.raw ea509373… is checked
-when present: it must currently *lack* zforce2.idc (the defect under diagnosis);
-source/product must ship zforce2.idc for the next authorized rebuild.
+Does not claim device hardware behavior. After the idc rebuild, packed
+system.raw under voyage-experimental-PRIVATE-candidate-zforce-idc-* must
+contain zforce2.idc (touchScreen) while retaining cyttsp4_mt.idc. Source and
+pw3.mk must still ship the copy rule. FSR/ABS caveats remain separate.
 """
 from __future__ import annotations
 
@@ -22,6 +23,9 @@ FSR_C = Path('/home/builder/pw3-build/linux-android-core/drivers/input/keyboard/
 INPUT_READER = Path(
     '/home/builder/android-src/frameworks/native/services/inputflinger/InputReader.cpp')
 PACKED_RAW = Path(
+    '/mnt/build-share/voyage-experimental-PRIVATE-candidate-zforce-idc-20261112/export/system.raw.img')
+# Prior defect image (kept for regression contrast; not required on host).
+PACKED_RAW_PRE_IDC = Path(
     '/mnt/build-share/voyage-experimental-PRIVATE-candidate-zforce-20261112/export/system.raw.img')
 
 
@@ -73,12 +77,27 @@ class VoyageInputPackaging(unittest.TestCase):
         self.assertIn('#define X_RESOLUTION                600', text)
         self.assertIn('#define Y_RESOLUTION                800', text)
 
-    def test_packed_ea509373_system_lacks_zforce2_idc(self):
+    def test_packed_idc_rebuild_ships_zforce2_touchscreen_idc(self):
         if not PACKED_RAW.is_file():
-            self.skipTest('packed system.raw not on host')
+            self.skipTest('packed idc system.raw not on host')
         import subprocess
         out = subprocess.check_output(
             ['debugfs', '-R', 'ls -l /usr/idc', str(PACKED_RAW)],
+            text=True, stderr=subprocess.STDOUT)
+        self.assertIn('cyttsp4_mt.idc', out)
+        self.assertIn('zforce2.idc', out)
+        body = subprocess.check_output(
+            ['debugfs', '-R', 'cat /usr/idc/zforce2.idc', str(PACKED_RAW)],
+            text=True, stderr=subprocess.STDOUT)
+        self.assertIn('touch.deviceType = touchScreen', body)
+        self.assertIn('device.internal = 1', body)
+
+    def test_pre_idc_ea509373_image_lacked_zforce2_idc(self):
+        if not PACKED_RAW_PRE_IDC.is_file():
+            self.skipTest('pre-idc packed system.raw not on host')
+        import subprocess
+        out = subprocess.check_output(
+            ['debugfs', '-R', 'ls -l /usr/idc', str(PACKED_RAW_PRE_IDC)],
             text=True, stderr=subprocess.STDOUT)
         self.assertIn('cyttsp4_mt.idc', out)
         self.assertNotIn('zforce2.idc', out)

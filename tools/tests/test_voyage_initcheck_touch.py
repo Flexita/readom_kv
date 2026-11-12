@@ -29,6 +29,9 @@ PACKED_BOOTREPORT = Path('/tmp/sys-audit-zforce/pw3-boot-report')
 PACKED_BOOT_RC = Path('/tmp/sys-audit-zforce/pw3-boot-report.rc')
 PACKED_VOYAGE_HW = Path('/tmp/sys-audit-zforce/init.voyage.hardware.rc')
 SYSTEM_RAW = Path(
+    '/mnt/build-share/voyage-experimental-PRIVATE-candidate-zforce-idc-20261112/export/system.raw.img')
+# Fallback if only the pre-idc zforce image is present on the host.
+SYSTEM_RAW_FALLBACK = Path(
     '/mnt/build-share/voyage-experimental-PRIVATE-candidate-zforce-20261112/export/system.raw.img')
 
 
@@ -36,7 +39,8 @@ def ensure_packed_extracts():
     needed = (PACKED_INITCHECK, PACKED_BOOTREPORT, PACKED_BOOT_RC, PACKED_VOYAGE_HW)
     if all(p.is_file() for p in needed):
         return
-    if not SYSTEM_RAW.is_file():
+    raw = SYSTEM_RAW if SYSTEM_RAW.is_file() else SYSTEM_RAW_FALLBACK
+    if not raw.is_file():
         raise unittest.SkipTest('packed system.raw.img not on this host')
     PACKED_INITCHECK.parent.mkdir(parents=True, exist_ok=True)
     for src, dst in (
@@ -46,7 +50,7 @@ def ensure_packed_extracts():
         ('/vendor/etc/init/init.voyage.hardware.rc', PACKED_VOYAGE_HW),
     ):
         subprocess.run(
-            ['debugfs', '-R', f'dump {src} {dst}', str(SYSTEM_RAW)],
+            ['debugfs', '-R', f'dump {src} {dst}', str(raw)],
             check=True, capture_output=True)
 
 

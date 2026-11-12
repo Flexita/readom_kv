@@ -31,7 +31,7 @@ The uImage load address is `0x80008000`. That is what this build wrote into the 
 
 The stock-side static libc was built the way `tools/build-test-libc.sh` specifies: musl 1.2.5 (archive SHA-256 `a9a118bb…c75e4`, matching `source-lock.json`) with `-mfloat-abi=soft`. `boot/handoff/sha256.c` was linked statically with it. The ELF flags are `Version5 EABI, soft-float ABI`, with no `INTERP`. Under `qemu-arm-static`, SHA-256 of the bytes `voyage` matches CPython on the host. This is not a full `Readom.sh`: that still needs the kernel, an initramfs and an AOSP image, which were not packed here.
 
-The official `update.bin` (SHA-256 `80856a11…7a155b`, 247,461,749 bytes, magic `SP01`) does not contain this device's `Linux version`, `3.0.35-lab126`, `Thu Apr 8 09:39:57`, `builder@eink-builds`, `pm_test_show`, or the eips hash. The signature was not stripped, and the stock function bodies were not computed from that public file. The kernel built here is `3.0.35-lab126-voyage-android81+`, not the device's `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021` (gcc 4.9.1), so its function bodies are not a stand-in for the stock kernel.
+A raw search of the wrapped `update.bin` does not find the device banner; the unpacked `uImage`/`Image` does carry the matching `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021` (see the next section). The kernel built here is `3.0.35-lab126-voyage-android81+`, not that stock image, so its function bodies are not a stand-in.
 
 ## Read-only device report, 2026-11-12
 
@@ -50,13 +50,15 @@ Readings that are complete:
 
 Those values go into `boot/profiles/voyage-5.13.6.json` on the model branch. This commit only changes the shared gate: `dd_voyage_5_13_6` records the kernel version and `/mnt/base-us`, and `identity_ready` stays 0.
 
-Not filled, and not guessed:
+## Extra probe and offline kernel (written on the model branch)
 
-- `log_pos_goal` and `ip` are `[redacted]` in the report. The filtered command line is not the handoff `stock_cmdline`. The PW3 values `log_pos_goal=0x8fff0000` and `ip=off` are not substituted.
-- The running kernel's machine id was not read. 4091 from `mach-types` stays under `source` and is not copied into `measured.machine_id`.
-- Partition start sectors and the loop byte offset were not read.
-- The four `stock_functions` body hashes were not read. The public `update.bin` has no plaintext kernel.
-- Wi-Fi calibration paths and `/proc/bootmode` were not read. `/proc/board_id` and the MAC were left out on purpose.
+The extra report is 1779 bytes, SHA-256 `47a04517…a4ed`, `result: partial`, `errors: 1`. The allow-listed cmdline (including `log_pos_goal=0x8fff0000` and `ip=off`), p1–p4 starts, and loop offset 8192 are written into `measured` on the model branch. This branch keeps every `measured` key null so the shared gate stays fail-closed.
+
+`/proc/bootmode` read as an empty string — that is the one error and must **not** be filled as `main`. `machine_id` stays `not collected` and must not become a number; source `4091` stays under `source` only.
+
+Wi-Fi: modules were not loaded under airplane mode. Candidate ordinary files under `/opt/ar6k/...` exist with sizes; that is not a confirmed runtime driver path.
+
+The public `update.bin` was unpacked with KindleTool as a format parse (download SHA-256 ≠ RSA verification; signatures not altered; extracted code not executed). `imx60_wario/uImage` → zImage → Image (`bb15c171…76530`) carries the exact device banner `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021`, and the four `stock_functions` hashes are on the model branch. Because the public firmware already yielded a matching kernel, no rootfs kernel-file probe script is produced. `/proc/kcore`, `/dev/mem` and boot partitions are not read.
 
 Every `mmcblk0` node's sysfs `ro` is 0. That is the block layer's read-only flag, not how the root filesystem is mounted. The command line says `ro` and `/` is mounted read-only from `/dev/root`. Those are different. The installer writes files on the user FAT only after the identity gate. It does not open `mmcblk0p1` or `mmcblk0boot*`. `ro=0` is not permission to rewrite the stock partitions.
 
@@ -68,33 +70,6 @@ The system image is 512 MiB and the data image is 1024 MiB, format 2. While the 
 
 ## Not done, so this is not a boot
 
-Until the function-body hashes, the complete command line and the runtime machine id are real readings, an installable entry is not packed and the device is not started. A first Android boot would still be a separate step after that, and this round does not authorize it.
+The model branch still lacks a runtime `machine_id`; `identity_ready` / `device_confirmed` / `installable` stay false. Until those open on evidence, an installable entry is not packed and the device is not started. A first Android boot would still be a separate step after that, and this round does not authorize it.
 
-## Next read-only collection
-
-`tools/voyage-probe-extra.sh` asks only for the handoff fields that are still empty. Copy it to the Kindle as `/mnt/us/RUNME.sh`, eject, and type `;log runme` in the search box. It writes only `/mnt/us/voyage-probe-extra.txt` and two short lines on the screen. Do not run `Readom.sh`, do not sign in, do not read kernel memory, and do not copy a serial, a MAC or `/proc/board_id`.
-
-`log_pos_goal` is the physical address of the printk buffer, not an identity field. The script prints it only when it is a plain decimal number or `0x` plus at most eight hex digits. `ip` is kept only for `off`, `none`, `on` or `dhcp`. An IP address or any other value is named as withheld and not printed. The raw `/proc/cmdline` line is not written.
-
-No proc file publishes only the numeric machine id. `/proc/atags` also carries the board id and the MAC, so the script does not read it, and it does not write the mach-types number.
-
-The public `update.bin` (`SP01`, certificate number 2, inner `FB03`, target revision `3731990038`, the same number as the archive name and the `373199` in the device's `version.txt`) was not unpacked. KindleTool's extract moves the signature block aside and unpacks without an RSA check, so it was not run. The four function-body hashes are still absent. Do not take them from `/proc/kcore` or from a block device. A stock kernel that is an ordinary file on the root filesystem would be a later read-only question; it is not read in this round.
-
-The commands below are the older list. Most of them are already answered:
-
-```sh
-uname -a
-sed -n '1,5p' /proc/version
-grep -E 'Hardware|Revision' /proc/cpuinfo
-wc -c /usr/sbin/eips; sha256sum /usr/sbin/eips
-tr '\0' '\n' < /proc/cmdline
-awk '$1=="System" || /System RAM/' /proc/iomem
-awk '$4 ~ /mmcblk0/ {print}' /proc/partitions
-cat /sys/class/block/mmcblk0/size
-for b in mmcblk0 mmcblk0p1 mmcblk0p2 mmcblk0p3 mmcblk0p4 mmcblk0boot0 mmcblk0boot1; do
-  echo "$b $(cat /sys/class/block/$b/ro 2>/dev/null) $(cat /sys/class/block/$b/size 2>/dev/null)"
-done
-df -k /mnt/us /mnt/base-us
-```
-
-`pm_test_show`, `l2x0_flush_all`, `l2x0_disable` and `l2x0_inv_all` still have to be hashed from the stock kernel file that matches this uname, not from the PW3 record and not from the Android kernel built here. Until then the handoff module should not be built.
+No ordinary proc file publishes only the machine id. `/proc/atags` also carries the board id and MAC, so it is not read. Expanding collection into boot partitions or memory needs a separate necessity-and-risk note first; it is not done here.

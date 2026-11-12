@@ -27,7 +27,7 @@
     "firmware_url": "https://s3.amazonaws.com/firmwaredownloads/update_kindle_voyage_5.13.6.bin",
     "firmware_sha256": "80856a112393a5a8c18ed66752193f5702abb2d9476a2d8657082bb11f7a155b",
     "firmware_bytes": 247461749,
-    "firmware_note": "Official update.bin, magic SP01. No squashfs magic and no plaintext Linux version or eips. The 1f8b bytes at offset 30755 are not a gzip stream. uname, eips and partition geometry were not extracted.",
+    "firmware_note": "Official update.bin, magic SP01, cert 2, inner FB03. KindleTool extract is a format parse; download SHA-256 is not RSA verification. The matching stock Image and stock_functions hashes are recorded on the model-branch profile. This shared profile keeps measured null so the gate stays closed.",
     "kernel_makefile": "3.0.35",
     "kernel_makefile_sha256": "903f3c043adcff6419ab7102238edb2a9172596466a9289e91b7001477066462",
     "defconfig": "imx60_wario_defconfig",

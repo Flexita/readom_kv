@@ -33,7 +33,7 @@ uImage 头里的加载地址是 `0x80008000`。这是这次编译写进头里的
 
 原厂侧静态程序按 `tools/build-test-libc.sh` 的办法编了 musl 1.2.5（归档 SHA-256 `a9a118bb…c75e4`，与 `source-lock.json` 一致），`-mfloat-abi=soft`。用它静态链接了 `boot/handoff/sha256.c`。ELF 头标志是 `Version5 EABI, soft-float ABI`，没有 `INTERP`。`qemu-arm-static` 对输入 `voyage` 算出的 SHA-256 与主机 Python 相同。这不是完整的 `Readom.sh`：完整入口还要内核、initramfs 和 AOSP 镜像，那些没有在这里打包。
 
-官方 `update.bin`（SHA-256 `80856a11…7a155b`，247,461,749 字节，文件头 `SP01`）里搜不到这次真机的 `Linux version`、`3.0.35-lab126`、`Thu Apr 8 09:39:57`、`builder@eink-builds`、`pm_test_show` 或 eips 哈希。没有拆签名，也没有从这份公开固件里算出内核函数体。自己编出的 `3.0.35-lab126-voyage-android81+` 不是这台机器上的 `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021`（gcc 4.9.1），所以不能拿它的函数体冒充原厂内核。
+对封装后的 `update.bin` 直接搜明文找不到真机横幅；解包后的 `uImage`/`Image` 才带有一致的 `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021`（见下一节）。自己编出的 `3.0.35-lab126-voyage-android81+` 不是那份原厂内核，不能拿它的函数体冒充。
 
 ## 2026-11-12 的只读真机报告
 
@@ -52,13 +52,15 @@ uImage 头里的加载地址是 `0x80008000`。这是这次编译写进头里的
 
 这些数写进机型分支的 `boot/profiles/voyage-5.13.6.json`。本提交只改共用闸门：`dd_voyage_5_13_6` 记下内核版本和 `/mnt/base-us`，`identity_ready` 仍是 0。
 
-不能补、也不猜的：
+## 补充探针与离线内核（机型分支写入）
 
-- `log_pos_goal` 和 `ip` 在报告里是 `[redacted]`。过滤后的命令行不是交接用的 `stock_cmdline`。PW3 的 `log_pos_goal=0x8fff0000` 和 `ip=off` 不拿来填。
-- 运行中的机器号没有读到。源码里的 4091 仍只写在 `source`，不写入 `measured.machine_id`。
-- 分区起始扇区和 loop 的字节偏移没有读到。
-- `stock_functions` 四个函数体哈希没有。公开 `update.bin` 里没有明文内核。
-- Wi-Fi 校准文件路径、`/proc/bootmode` 没有读。`/proc/board_id` 和 MAC 故意不采集。
+补充报告 1779 字节，SHA-256 `47a04517…a4ed`，`result: partial`，`errors: 1`。允许名单内的 cmdline（含 `log_pos_goal=0x8fff0000`、`ip=off`）、p1–p4 的 start、loop offset 8192 已写入机型分支的 `measured`。本分支的 `measured` 仍全是 null，共用闸门继续 fail-closed。
+
+`/proc/bootmode` 读出来是空字符串——这就是那一个 error，**不能**填成 `main`。`machine_id` 仍是 `not collected`，不能变成数值；源码里的 4091 只留在 `source`。
+
+Wi-Fi：飞行模式下模块未加载；`/opt/ar6k/...` 下候选普通文件存在且有大小，不等于确定的驱动路径。
+
+公开 `update.bin` 已用 KindleTool 做格式解包（下载 SHA-256 ≠ RSA 验签；未改签名；未运行解出代码）。`imx60_wario/uImage` → zImage → Image（`bb15c171…76530`）带有与真机一致的 `#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021` 横幅，四个 `stock_functions` 哈希已写入机型分支。公开固件已给出匹配内核，因此不另产根文件系统内核文件探测脚本。不读 `/proc/kcore`、`/dev/mem` 或引导分区。
 
 块设备的 sysfs `ro` 全是 0。这是块层的只读标志，不是根文件系统的挂载方式。命令行里的 `ro` 和 `/` 挂在只读的 `/dev/root` 上，是另一件事。安装器只在身份闸门之后写用户 FAT 上的文件，不打开 `mmcblk0p1` 或 `mmcblk0boot*`。`ro=0` 不是去写原厂分区的许可。
 
@@ -70,33 +72,6 @@ uImage 头里的加载地址是 `0x80008000`。这是这次编译写进头里的
 
 ## 还没做、所以不能说能启动
 
-函数体哈希、完整命令行和运行时机器号到齐之前，不能打包可安装入口，也不能在设备上启动。即便以后到齐，第一次启动 Android 仍是单独的一步，这一轮没有授权。
+机型分支仍缺运行时 `machine_id`；`identity_ready` / `device_confirmed` / `installable` 仍为 false。到齐之前不能打包可安装入口，也不能在设备上启动。即便以后到齐，第一次启动 Android 仍是单独的一步，这一轮没有授权。
 
-## 下一次只读采集
-
-`tools/voyage-probe-extra.sh` 只问交接代码还缺的项。把它复制成 Kindle 上的 `/mnt/us/RUNME.sh`，弹出 U 盘，在搜索框输入 `;log runme`。它只写 `/mnt/us/voyage-probe-extra.txt`，并在屏幕上写两行短字。不要运行 `Readom.sh`，不要登录，不要读内核内存，不要抄序列号、MAC 或 `/proc/board_id`。
-
-`log_pos_goal` 是 printk 缓冲的物理地址，不是身份字段。脚本只在它是纯数字或 `0x` 加最多 8 位十六进制时才写出。`ip` 只接受 `off`、`none`、`on`、`dhcp`；IP 地址和其他值只留下“已省略”的说明。原始 `/proc/cmdline` 整行不会写入报告。
-
-运行时机器号没有只含这个数字的 proc 文件。`/proc/atags` 同时带着 board id 和 MAC，脚本不读它，也不把源码里的机器号写进去。
-
-公开 `update.bin`（`SP01`，证书号 2，内层 `FB03`，目标版本号 `3731990038`，与固件包名和真机 `version.txt` 里的 `373199` 一致）没有被拆开。KindleTool 的提取是把签名块挪开再解包，并不做 RSA 校验，所以没有运行。四个函数体哈希仍然没有。不要从 `/proc/kcore` 或块设备里挖内核。若根文件系统上有普通文件形式的原厂内核，那是下一步可以讨论的只读文件，这一轮不读。
-
-下面这段是旧的问题清单，其中大部分这次已经回答：
-
-```sh
-uname -a
-sed -n '1,5p' /proc/version
-grep -E 'Hardware|Revision' /proc/cpuinfo
-wc -c /usr/sbin/eips; sha256sum /usr/sbin/eips
-tr '\0' '\n' < /proc/cmdline
-awk '$1=="System" || /System RAM/' /proc/iomem
-awk '$4 ~ /mmcblk0/ {print}' /proc/partitions
-cat /sys/class/block/mmcblk0/size
-for b in mmcblk0 mmcblk0p1 mmcblk0p2 mmcblk0p3 mmcblk0p4 mmcblk0boot0 mmcblk0boot1; do
-  echo "$b $(cat /sys/class/block/$b/ro 2>/dev/null) $(cat /sys/class/block/$b/size 2>/dev/null)"
-done
-df -k /mnt/us /mnt/base-us
-```
-
-`pm_test_show`、`l2x0_flush_all`、`l2x0_disable`、`l2x0_inv_all` 仍只能从对得上这次 uname 的原厂内核文件计算，不能用 PW3 的哈希，也不能用这里编出的 Android 内核。在此之前交接模块不应被编出来。
+没有只发布机器号的普通 proc 文件。`/proc/atags` 同时带着 board id 和 MAC，不读。若要把采集扩大到引导分区或内存：先单独说明必要性与风险，不执行。

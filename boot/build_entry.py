@@ -36,7 +36,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PORT = HERE.parent
-PROFILE = HERE / 'profiles/pw3-5.16.2.1.1.json'
+PROFILE = HERE / 'profiles/voyage-5.13.6.json'
 KERNEL_SOURCE = Path('/home/builder/pw3-build/linux-android-core')   # tools/build-kernel.sh android-core
 TOOLS = '/home/builder/toolchains/aosp-arm-gcc49/bin/arm-linux-androideabi-'
 MUSL = '/home/builder/toolchains/musl-arm/bin/musl-gcc'
@@ -125,6 +125,10 @@ def main():
     ap.add_argument('--release-url', action='append', default=[], required=True,
                     help='the directory the payload sits in; repeat it for a second origin, in the order the installer tries them')
     a = ap.parse_args()
+    spec_v = importlib.util.spec_from_file_location('voyage_profile', PORT / 'tools/voyage_profile.py')
+    voyage_profile = importlib.util.module_from_spec(spec_v)
+    spec_v.loader.exec_module(voyage_profile)
+    voyage_profile.refuse_unless_installable(PROFILE)
     if platform.node() != 'lima-pw3' or os.geteuid() == 0:
         sys.exit('Run as the builder in the build VM (tools/vm.sh shell).')
     # One directory of the user store holds both images, and the entry reads its

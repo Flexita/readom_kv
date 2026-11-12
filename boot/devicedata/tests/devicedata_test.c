@@ -91,7 +91,7 @@ static int atags(struct dd_buf *out, struct dd_why *why) {
  * "another Kindle or another firmware" must say so (`other`), because the
  * screen for those is the one that does not end in "restart and tap again". */
 static void test_device_matches(void) {
-    struct dd_why why = {{0}, 0};
+    struct dd_why why = {0};
     CHECK(dd_device_matches(root, &dd_pw3_5_16_2_1_1, &why) == 0 && !why.text[0]);
     struct { const char *path, *text; int other; } bad[] = {
         {"/proc/cmdline", "rootwait console=ttymxc0,115200 ro root=/dev/mmcblk0p1\n", 1},
@@ -123,7 +123,7 @@ static void test_device_matches(void) {
 
 static void test_atags(void) {
     struct dd_buf b = {0};
-    struct dd_why why = {{0}, 0};
+    struct dd_why why = {0};
     CHECK(atags(&b, &why) == 0);
     /* CORE, REVISION, REVISION16, MACADDR, BOOTMODE, two MEM banks, CMDLINE, INITRD2, NONE. */
     static const uint32_t kinds[] = {0x54410001, 0x54410007, 0x5441000b, 0x5441000d, 0x5441000f,
@@ -174,7 +174,7 @@ static void test_atags(void) {
 
 static void test_envelope_and_gzip(void) {
     struct dd_buf e = {0}, g = {0};
-    struct dd_why why = {{0}, 0};
+    struct dd_why why = {0};
     CHECK(dd_envelope(wbf, sizeof(wbf), wrf, sizeof(wrf), &e, &why) == 0);
     CHECK(!memcmp(e.data, "PW3WFP1", 8) && get32(e.data + 8) == 1 && get32(e.data + 12) == 64);
     CHECK(get32(e.data + 16) == sizeof(wbf) && get32(e.data + 20) == sizeof(wrf) && get32(e.data + 24) == 64 + sizeof(wbf));
@@ -230,7 +230,7 @@ static const struct entry *find(const struct entry *e, unsigned n, const char *n
 
 static void test_archive(void) {
     struct dd_buf a = {0};
-    struct dd_why why = {{0}, 0};
+    struct dd_why why = {0};
     struct dd_build build = {CMDLINE, "schema=1\nadb_key_sha256=none\n", "android/data.img", 1 << 20};
     CHECK(dd_archive(root, &dd_pw3_5_16_2_1_1, &build, &a, &why) == 0);
     struct entry e[32];
@@ -286,7 +286,7 @@ static void test_archive(void) {
 static void test_module_rules(void) {
     puts_("/proc/iomem", "80000000-9fffffff : System RAM\n  80008000-80500000 : Kernel text\n");
     struct dd_buf b = {0};
-    struct dd_why why = {{0}, 0};
+    struct dd_why why = {0};
     const uint32_t initramfs = 9u << 20;
     CHECK(dd_atags(root, &dd_pw3_5_16_2_1_1, CMDLINE, 0x84000000u, initramfs, &b, &why) == 0);
     static const pw_u32 kinds[] = {0x54410001, 0x54410002, 0x54410007, 0x54410009, 0x5441000b, 0x5441000d, 0x5441000f, 0x54420005};
@@ -323,12 +323,26 @@ static void test_module_rules(void) {
     dd_free(&b);
 }
 
+static void test_voyage_refuses_before_compare(void) {
+    struct dd_why why = {0};
+    CHECK(dd_voyage_5_13_6.identity_ready == 0);
+    CHECK(dd_voyage_5_13_6.stock_cmdline[0] == 0);
+    CHECK(dd_voyage_5_13_6.kernel_version[0] == 0);
+    CHECK(dd_pw3_5_16_2_1_1.identity_ready == 1);
+    /* The fixture in `root` is a Paperwhite-shaped system. A Voyage profile
+     * with no measured identity must refuse it instead of matching. */
+    CHECK(dd_device_matches(root, &dd_voyage_5_13_6, &why) == -1);
+    CHECK(why.blocked == 1);
+    CHECK(strstr(why.text, "has not been measured") != NULL);
+}
+
 int main(void) {
     const char *tmp = getenv("TMPDIR");
     snprintf(root, sizeof(root), "%s/devicedata-test-XXXXXX", tmp && *tmp ? tmp : "/tmp");
     assert(mkdtemp(root));
     make_device();
     test_device_matches();
+    test_voyage_refuses_before_compare();
     test_atags();
     test_envelope_and_gzip();
     test_archive();

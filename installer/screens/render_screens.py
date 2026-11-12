@@ -218,6 +218,10 @@ def screens(payload_mb, payload_name, supported):
          % supported[1]),
         ('E102', '电量低于 40%%。请充电后%s。' % tap, 'The battery is below 40%. Charge it, then tap Readom in the library again.'),
         ('E103', '上一次的安装还在进行，请等它完成。', 'The previous installation is still running. Please wait for it to finish.'),
+        ('E105',
+         '这个构建不能安装。Voyage 的原厂固件身份还没有从真机采集，所以安装停在这里，没有写入系统镜像。',
+         'This build cannot be installed. The Voyage stock-firmware identity has not been read from a device, '
+         'so installation stopped here and no system image was written.'),
         ('E104', 'Kindle 连着电脑时不能启动 Android。请拔掉数据线，然后%s。接充电器没有关系。' % tap,
          'Android cannot start while the Kindle is connected to a computer. Unplug the USB cable, then tap Readom in the '
          'library again. A charger is fine.'),

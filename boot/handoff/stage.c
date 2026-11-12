@@ -534,8 +534,13 @@ static int __init stage_init(void)
        strcmp(u->machine,"armv7l") || PHYS_OFFSET!=0x80000000)return -ENOEXEC;
 #elif PWS_PROFILE == 2
     if(!strstr(u->release,"-pw3-core-smoke") || PHYS_OFFSET!=0x60000000)return -ENOEXEC;
-#else
+#elif PWS_PROFILE == 3
+    /* Voyage profile with no measured identity. Do not fall through into
+     * native_init, and do not reuse the Paperwhite version string above. */
     (void)u;
+    return -EPERM;
+#else
+#error "Unknown handoff profile"
 #endif
     { int rc=native_init();if(rc)return rc;rc=misc_register(&device);if(rc)native_exit();return rc; }
 }

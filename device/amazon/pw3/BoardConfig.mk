@@ -46,44 +46,29 @@ TARGET_COPY_OUT_VENDOR := system/vendor
 # and the Kindle's own volume gets those 64 MiB back for books -- this device
 # goes from 643.0 MiB free to about 707 MiB.
 BOARD_SYSTEMIMAGE_PARTITION_SIZE := 536870912
-# 1792 MiB (1.75 GiB), set on 2026-10-15 and kept on 2026-11-03 after the two
-# sizes were worked out again against what the device reports. Everything below
-# is `df` on the device on 2026-11-03, with the one application that matters
-# installed, logged in and a book downloaded:
+# 1024 MiB data image, set on 2026-11-12 for a Voyage whose user volume is
+# about 3 GB in total, not 3 GB free. This is an estimate, not a Voyage df.
 #
-#   the Kindle's own volume   3113.9 MiB, of which 643.0 MiB free
-#   /system (576 MiB image)    566.9 MiB, 445.9 MiB used, 79%
-#   /data   (1792 MiB image)  1763.8 MiB, 748.7 MiB used, 43%
+# The previous size was 1792 MiB. On the one PW3 that number was measured
+# against (2026-11-03), /data held 748.7 MiB once WeRead was logged in and one
+# book had been downloaded, and the Kindle volume itself was 3113.9 MiB.
+# 512 + 1792 + 64 MiB of reserve asked for about 2.49 GB free, which on a
+# 3 GB volume leaves almost no room for the Kindle's own books.
 #
-# What fills /data is downloaded books, so the question is not the 43% but what
-# is left: 1015.1 MiB, which is hundreds of books of text. That is what makes
-# this size sufficient, and it is why 1536 MiB was prepared on 2026-11-02 and
-# turned down by the owner on 2026-11-03: it would have taken 256 MiB from the
-# one thing /data is for, to buy room on a volume that already has 643 MiB
-# free.
+# 1024 MiB stays above that 748.7 MiB one-book reading and is the smallest
+# power of two that does. Required free space becomes
+# 512 MiB system + 1024 MiB data + 64 MiB reserve = 1600 MiB. On a 3 GiB
+# volume that is empty, about 1.44 GiB remains for Kindle books. Neither the
+# 3 GiB figure nor the 748.7 MiB figure was measured on a Voyage. The system
+# image stays 512 MiB: the last built image used 452.9 MiB and this tree was
+# not rebuilt, so shrinking the system file would be a lie.
 #
-# 2048 MiB was the other candidate -- a power of two, and the two images would
-# then be 2.5 GiB exactly. It was not taken, for two reasons that are both
-# arithmetic: a clean install would need 512 + 2048 + 64 MiB = 2.75 GB of a
-# 3.27 GB volume, so a reader with more than about 465 MB of their own books
-# could not install at all; and 256 MiB more for books that the measurement
-# above says are not needed costs every reader that. The room this version
-# hands back comes out of the system image instead, which is read-only and
-# measured, not guessed: 64 MiB of it, so this device goes from 643.0 MiB free
-# to about 707 MiB.
-#
-# The sizes are 512 MiB and 7 x 256 MiB; together 2304 MiB, which is 9 x 256
-# MiB -- whole steps of a quarter of a GiB, with the read-only one a power of
-# two.
-#
-# A size change here has to go with --data-format (installer/build_payload.py),
-# because an installer keeps an existing data image only of its own format and
-# its own size: a device holding the old one is refused with E304, changes no
-# file, and goes on running the version it has until the reader deletes
-# data.img themselves -- which resets their applications and books. That is why
-# this number moves only in a version that is installed clean anyway, and why
-# it did not move here: an upgrade into this version keeps what the reader has.
-BOARD_USERDATAIMAGE_PARTITION_SIZE := 1879048192
+# Format 2, not 1. An installer keeps a data image only of its own format and
+# size (E304). A 1792 MiB image from the historical PW3 entry is refused
+# rather than mounted. build_payload.py reads PW3_DATA_FORMAT and will not
+# pack a different number.
+BOARD_USERDATAIMAGE_PARTITION_SIZE := 1073741824
+PW3_DATA_FORMAT := 2
 BOARD_FLASH_BLOCK_SIZE := 4096
 # Keep framework and APK dex preparation off the 512 MB target at first boot.
 # The product selects speed compilation only for its core UI applications.

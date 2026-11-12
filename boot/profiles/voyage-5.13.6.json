@@ -1,21 +1,66 @@
 {
-  "description": "Kindle Voyage (7th generation), stock firmware family 5.13.6. Not installable: the running image's identity has not been read from a device. Source notes below are hashes of Amazon's GPL archive and are not handoff parameters.",
+  "description": "Kindle Voyage (7th generation), stock firmware 5.13.6. A root read-only probe on 2026-11-12 filled the readings that were complete. Not installable: the command line is incomplete, the runtime machine id was not read, and the stock kernel function bodies were not hashed.",
   "installable": false,
   "identity_ready": false,
   "device_confirmed": false,
   "module_profile": 3,
-  "supported_zh": "Kindle Voyage（第 7 代）。这个构建不能安装：原厂固件身份还没有从真机采集。",
-  "supported_en": "Kindle Voyage (7th generation). This build cannot be installed: the stock firmware identity has not been read from a device.",
+  "supported_zh": "Kindle Voyage（第 7 代），固件 5.13.6。eips 和 uname 已从真机读到。这个构建仍不能安装：命令行不完整，运行时机器号和内核函数体还没有。",
+  "supported_en": "Kindle Voyage (7th generation), firmware 5.13.6. eips and uname were read from a device. This build still cannot be installed: the command line is incomplete, and the runtime machine id and kernel function bodies are not.",
   "measured": {
-    "eips_sha256": null,
-    "eips_bytes": null,
-    "uname_release": null,
-    "uname_version": null,
+    "eips_sha256": "7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259",
+    "eips_bytes": 61104,
+    "uname_release": "3.0.35-lab126",
+    "uname_version": "#2 PREEMPT Thu Apr 8 09:39:57 UTC 2021",
     "machine_id": null,
     "stock_cmdline": null,
-    "ram": null,
-    "partition_table": null,
+    "ram": [
+      [
+        "0x80000000",
+        "0x20000000"
+      ]
+    ],
+    "partition_table": {
+      "sysfs_ro_all_zero": true,
+      "root_mount": "ro",
+      "root_cmdline": "root=/dev/mmcblk0p1",
+      "ro_note": "sysfs ro=0 is the block read-only flag. The root filesystem is mounted read-only. Those are not the same fact, and neither one authorizes writing mmcblk0p1 or the boot partitions.",
+      "starts_not_read": true,
+      "devices": [
+        {"name": "mmcblk0", "sectors_512": 7733248, "blocks_1k": 3866624, "sysfs_ro": 0},
+        {"name": "mmcblk0p1", "sectors_512": 921600, "blocks_1k": 460800, "sysfs_ro": 0},
+        {"name": "mmcblk0p2", "sectors_512": 131072, "blocks_1k": 65536, "sysfs_ro": 0},
+        {"name": "mmcblk0p3", "sectors_512": 131072, "blocks_1k": 65536, "sysfs_ro": 0},
+        {"name": "mmcblk0p4", "sectors_512": 6385664, "blocks_1k": 3192832, "sysfs_ro": 0},
+        {"name": "mmcblk0boot0", "sectors_512": 4096, "blocks_1k": 2048, "sysfs_ro": 0},
+        {"name": "mmcblk0boot1", "sectors_512": 4096, "blocks_1k": 2048, "sysfs_ro": 0}
+      ],
+      "user_fat": {
+        "mount": "/mnt/us",
+        "loop_mount": "/mnt/base-us",
+        "blocks_1k": 3188640,
+        "used_1k": 3116848,
+        "available_1k": 71792
+      }
+    },
     "stock_functions": null
+  },
+  "device_probe": {
+    "sha256": "eab14ee928b2abaf6925d1fd2f04e461c1bc0525fef01a6cd5b9252b05864f15",
+    "bytes": 2195,
+    "generated": "Thu Nov 12 12:39:20 GMT+8:0100 2026",
+    "uid": 0,
+    "marker": "VOYAGE_PROBE_DONE",
+    "prettyversion": "Kindle 5.13.6",
+    "version_txt": "System Software Version: 038-juno_1306_icewine_wario-373199Thu Apr  8 10:43:14 UTC 2021com.lab126.eink.icewine.os",
+    "proc_version": "Linux version 3.0.35-lab126 (builder@eink-builds) (gcc version 4.9.1 (GCC) ) #2 PREEMPT Thu Apr 8 09:39:57 UTC 2021",
+    "hardware": "Freescale i.MX 6SoloLite based Wario Board",
+    "cpu_revision": "60000",
+    "cpu_part": "0xc09",
+    "iomem_system_ram": "80000000-9fffffff",
+    "cmdline_filtered": "rootwait log_pos_goal=[redacted] console=ttymxc0,115200 root=/dev/mmcblk0p1 ro ip=[redacted] quiet video=mxcepdcfb:E60,bpp=8,x_mem=3M",
+    "cmdline_redacted_keys": ["log_pos_goal", "ip"],
+    "cmdline_withheld": "The filtered line is not a handoff command line. log_pos_goal and ip were removed before the report was kept and are not guessed.",
+    "capacity_note": "The owner states the chip is 4 GB and USB shows about 3.3 GB. mmcblk0 is 3959422976 bytes. mmcblk0p4 is 3269459968 bytes. The mounted FAT is 3265167360 bytes total and had 73515008 bytes free. None of these is 3 GB of free space."
   },
   "source": {
     "gpl_url": "https://kindledownloads.s3.amazonaws.com/Kindle_src_5.13.6_3731990038.tar.gz",

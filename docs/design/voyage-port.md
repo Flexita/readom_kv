@@ -104,9 +104,9 @@ ATAG 协议本身不携带 ARM `MACH_TYPE`。该值在进内核时由 bootloader
 | Jammy chroot + python2.7 + Go 1.10.8 | **就绪** |
 | `cross_compiler.archive_sha256` | 原 lima 打包物**无法从公开 git/googlesource 复现**；改用锁定 revision `0390252` 的 revision-matched 工具链（见 `materialize-cross-compiler-from-git.sh`） |
 | Voyage `android-core` 内核 | **已编译** `3.0.35-lab126-voyage-android81`；`prepare-kernel-hardware` 已导出（`device_runtime_verified=false`） |
-| `voyage-userdebug` systemimage | **编译进行中**（experimental/unverified；日志 `voyage-aosp-system-build.log`） |
-| 产物 | 尚无完成的 Voyage `system.img`；**不是可启动**，不得标 installable |
+| `voyage-userdebug` systemimage | **云端 amd64 已出 experimental 镜像**（`AOSP_EXIT:0`，`ro.build.display.id=voyage-experimental-unverified`；`WITH_DEXPREOPT=false` 因 host dex2oat 无法 MAP_FIXED `boot.art`） |
+| 产物 | sparse `system.img` 331510616 B，sha256 `7d561463…e586`，unsparse 512 MiB；`ramdisk.img` sha256 `b8fa8659…87d1d`。**编译成功 ≠ 可启动/可安装**；尚无 `build_payload` 载荷、空 data 镜像与入口包装 |
 
 ## 闸门
 
-`installable` / `identity_ready` / `device_confirmed` 仍为 false。bootmode=`main` 已补齐，但仍缺完成的 Voyage 镜像、用户确认的空间清理与首次启动授权。不得因单一字段通过而打开三旗标。不得用旧 PW3 镜像冒充。
+`installable` / `identity_ready` / `device_confirmed` 仍为 false。bootmode=`main` 与实验 `system.img` 都不够打开三旗标：仍缺用户确认的空间清理（峰值约 1600 MiB）、完整安装产物与首次启动授权；Wi‑Fi / 用户区写入 / 恢复路径均 **unverified**。不得因单一字段或单一镜像通过而放行安装。不得用旧 PW3 镜像冒充。

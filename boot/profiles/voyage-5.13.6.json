@@ -1,13 +1,13 @@
 {
-  "description": "Kindle Voyage (7th generation), stock firmware 5.13.6. Root read-only probes and an offline unpack of the official update.bin filled the readings that were complete. MACH_TYPE 4091 is a source-proven build pin from the matching stock Image, not a /proc reading. measured.bootmode is main (dedicated probe 2026-11-12). Still not installable: identity_ready / device_confirmed stay false, no finished Voyage Android image, free-space cleanup and first-boot authorization are not granted.",
+  "description": "Kindle Voyage (7th generation), stock firmware 5.13.6. Root read-only probes and an offline unpack of the official update.bin filled the readings that were complete. MACH_TYPE 4091 is a source-proven build pin from the matching stock Image, not a /proc reading. measured.bootmode is main (dedicated probe 2026-11-12). A cloud experimental voyage-userdebug system.img exists (WITH_DEXPREOPT=false, display.id voyage-experimental-unverified) but is not a finished install package and is not a boot result. Still not installable: installable / identity_ready / device_confirmed stay false; free-space cleanup and first-boot authorization are not granted.",
   "installable": false,
   "identity_ready": false,
   "device_confirmed": false,
   "module_profile": 3,
   "machine": 4091,
   "machine_why": "TARGET_MACHINE / transition r1. Offline: GPL mach-types mx6sl_wario=4091; imx60_wario_defconfig enables only CONFIG_MACH_MX6SL_WARIO; matching stock Image machine_desc.nr is 4091 next to name Freescale i.MX 6SoloLite based Wario Board (same Hardware string the device reported). ATAGs do not carry this number. measured.machine_id stays null.",
-  "supported_zh": "Kindle Voyage（第 7 代），固件 5.13.6。eips、uname、命令行、分区起点、四个原厂函数体、MACH_TYPE 4091（离线可证）和 bootmode=main（专用探针）已有证据。仍不能安装：三旗标未开、尚无完成的 Voyage Android 镜像，空间清理与首次启动未授权。",
-  "supported_en": "Kindle Voyage (7th generation), firmware 5.13.6. eips, uname, the command line, partition starts, the four stock function bodies, MACH_TYPE 4091 (proven offline) and bootmode=main (dedicated probe) have evidence. Still not installable: the three flags stay closed, no finished Voyage Android image, and free-space cleanup / first boot are not authorized.",
+  "supported_zh": "Kindle Voyage（第 7 代），固件 5.13.6。eips、uname、命令行、分区起点、四个原厂函数体、MACH_TYPE 4091（离线可证）和 bootmode=main（专用探针）已有证据。云端有 experimental voyage-userdebug system.img（非完整安装包、非启动证明）。仍不能安装：三旗标未开，空间清理与首次启动未授权。",
+  "supported_en": "Kindle Voyage (7th generation), firmware 5.13.6. eips, uname, the command line, partition starts, the four stock function bodies, MACH_TYPE 4091 (proven offline) and bootmode=main (dedicated probe) have evidence. A cloud experimental voyage-userdebug system.img exists (not a full install package, not a boot proof). Still not installable: the three flags stay closed; free-space cleanup / first boot are not authorized.",
   "measured": {
     "eips_sha256": "7916bee55c7ec9ab4d2da5859d5b27e3caee77dd971aa93d01fccc8b2fdd6259",
     "eips_bytes": 61104,

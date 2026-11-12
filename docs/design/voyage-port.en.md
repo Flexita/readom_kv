@@ -102,9 +102,9 @@ Scripts assume hostname `lima-pw3` plus a Jammy x86 chroot. This cloud host is x
 | Jammy chroot + python2.7 + Go 1.10.8 | **ready** |
 | `cross_compiler.archive_sha256` | original lima archive **not reconstructible** from public git/googlesource; using locked revision `0390252` via revision-matched toolchain (`materialize-cross-compiler-from-git.sh`) |
 | Voyage `android-core` kernel | **compiled** `3.0.35-lab126-voyage-android81`; `prepare-kernel-hardware` exported (`device_runtime_verified=false`) |
-| `voyage-userdebug` systemimage | **compiling** (experimental/unverified; log `voyage-aosp-system-build.log`) |
-| Artifacts | no finished Voyage `system.img` yet; **not bootable**; must not mark installable |
+| `voyage-userdebug` systemimage | **cloud amd64 experimental image built** (`AOSP_EXIT:0`, `ro.build.display.id=voyage-experimental-unverified`; `WITH_DEXPREOPT=false` because host dex2oat cannot MAP_FIXED `boot.art`) |
+| Artifacts | sparse `system.img` 331510616 B, sha256 `7d561463…e586`, unsparse 512 MiB; `ramdisk.img` sha256 `b8fa8659…87d1d`. **Compile success ≠ bootable/installable**; no `build_payload` package, empty data image, or entry packaging yet |
 
 ## Gates
 
-`installable` / `identity_ready` / `device_confirmed` stay false. `bootmode=main` is now on record, but a finished Voyage image, owner-confirmed free-space cleanup, and explicit first-boot authorization are still missing. Do not open the three flags for a single field. A PW3 image must not stand in.
+`installable` / `identity_ready` / `device_confirmed` stay false. Neither bootmode=`main` nor an experimental `system.img` opens the three flags: owner-confirmed free-space cleanup (~1600 MiB peak), a full install package, and explicit first-boot authorization are still missing; Wi‑Fi / user-store writes / recovery remain **unverified**. Do not authorize install from one field or one image. A PW3 image must not stand in.

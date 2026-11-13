@@ -5,3 +5,7 @@ init_daemon_domain(pw3_fsr_enable)
 
 # /dev/keypad is a misc node; label as input_device via file_contexts.
 allow pw3_fsr_enable input_device:chr_file rw_file_perms;
+# Publish enable outcome for BootReport (sys.pw3.* → pw3_boot_prop).
+set_prop(pw3_fsr_enable, pw3_boot_prop)
+# stderr / kmsg for host logcat; not a unique-ID path.
+allow pw3_fsr_enable kmsg_device:chr_file { open write };

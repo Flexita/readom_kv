@@ -1,2 +1,6 @@
-# Import this fragment from the device active ueventd configuration.
+# Hardware-component fragment (also merged into /vendor/ueventd.rc).
+# ueventd parses /ueventd.pw3.rc (initramfs) at early-init and /vendor/ueventd.rc
+# when that path exists. Keep DAC here at 0660 system — never world-writable.
 /dev/graphics/fb0 0660 system graphics
+/dev/keypad 0660 system system
+/dev/als 0660 system system

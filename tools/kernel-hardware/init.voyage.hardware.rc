@@ -17,6 +17,15 @@ on post-fs-data
     insmod /vendor/lib/modules/cyttsp4_i2c.ko
     insmod /vendor/lib/modules/cyttsp4_mt_b.ko
     insmod /vendor/lib/modules/cfg80211.ko
+    # Late misc nodes: ueventd cold-boot ran before these modules. Re-assert
+    # DAC 0660 system + restorecon from file_contexts (input_device / sensors_device).
+    # Not chmod 666; not permissive SELinux.
+    chmod 0660 /dev/keypad
+    chown system system /dev/keypad
+    restorecon /dev/keypad
+    chmod 0660 /dev/als
+    chown system system /dev/als
+    restorecon /dev/als
     chown system system /sys/class/backlight/max77696-bl/brightness
     chmod 0660 /sys/class/backlight/max77696-bl/brightness
     chown system system /sys/class/backlight/max77696-bl/bl_power

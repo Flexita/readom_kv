@@ -24,7 +24,8 @@ PRODUCT_PACKAGES += \
 
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.sensor.light.xml:system/etc/permissions/android.hardware.sensor.light.xml \
-    device/amazon/pw3/input/fsr_keypad.kl:system/usr/keylayout/fsr_keypad.kl
+    device/amazon/pw3/input/fsr_keypad.kl:system/usr/keylayout/fsr_keypad.kl \
+    device/amazon/pw3/rootdir/ueventd.vendor.rc:$(TARGET_COPY_OUT_VENDOR)/ueventd.rc
 
 PRODUCT_PROPERTY_OVERRIDES += \
     ro.hardware.sensors=pw3

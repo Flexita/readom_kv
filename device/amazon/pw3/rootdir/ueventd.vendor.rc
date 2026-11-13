@@ -1,0 +1,7 @@
+# Parsed by system/core/init/ueventd.cpp as /vendor/ueventd.rc (after /vendor
+# symlink exists). Complements initramfs /ueventd.pw3.rc used at early-init.
+# Late-created misc nodes (fsr_keypad / als_max44009) also get explicit
+# chmod/chown/restorecon in init.voyage.hardware.rc after insmod.
+/dev/graphics/fb0 0660 system graphics
+/dev/keypad 0660 system system
+/dev/als 0660 system system

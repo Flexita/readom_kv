@@ -394,6 +394,25 @@ void TouchObserve(const std::string& event) {
            " rounds=" + std::to_string(g_touch_observe_rounds));
 }
 
+/* De-identified node meta: mode/uid/gid + char vs other. No inode/path uniq. */
+void DevNodeMeta(const char* path) {
+    struct stat st{};
+    if (stat(path, &st) != 0) {
+        Report(std::string("devnode path=") + path + " status=" + ErrStatus(errno));
+        return;
+    }
+    const char* kind = S_ISCHR(st.st_mode) ? "chr" :
+                       S_ISBLK(st.st_mode) ? "blk" :
+                       S_ISREG(st.st_mode) ? "reg" : "other";
+    char mode[8];
+    snprintf(mode, sizeof(mode), "%04o", static_cast<unsigned>(st.st_mode & 07777));
+    Report(std::string("devnode path=") + path +
+           " kind=" + kind +
+           " mode=" + mode +
+           " uid=" + std::to_string(st.st_uid) +
+           " gid=" + std::to_string(st.st_gid));
+}
+
 /* Voyage ALS: integer lux via ALS_IOCTL_GET_LUX only — not auto-brightness proof. */
 void AlsLuxSample() {
 #ifndef ALS_MAGIC_NUMBER
@@ -402,6 +421,7 @@ void AlsLuxSample() {
 #ifndef ALS_IOCTL_GET_LUX
 #define ALS_IOCTL_GET_LUX _IOR(ALS_MAGIC_NUMBER, 0x01, int)
 #endif
+    DevNodeMeta("/dev/als");
     const int fd = open("/dev/als", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
         Report("als_lux status=" + ErrStatus(errno));
@@ -418,6 +438,17 @@ void AlsLuxSample() {
     }
     if (lux < 0) lux = 0;
     Report("als_lux status=ok lux=" + std::to_string(lux));
+}
+
+/* PagePress enable outcome from pw3-fsr-enable (sys.pw3.fsr.enable). */
+void PagepressEnableStatus() {
+    DevNodeMeta("/dev/keypad");
+    const std::string v = android::base::GetProperty("sys.pw3.fsr.enable", "");
+    if (v.empty()) {
+        Report("pagepress_enable status=unset");
+        return;
+    }
+    Report("pagepress_enable status=" + Clean(v, 32));
 }
 
 void Inputs() {
@@ -441,7 +472,8 @@ void Inputs() {
            " pagepress=" + std::to_string(pagepress));
     /* Presence above is not event-ready / InputReader class proof.
      * t172u: Cypress digitizer — no zforce connected/init_stage probes.
-     * t174u: PagePress/ALS presence only; not a claim keys or auto-brightness work. */
+     * t174u/t175u: PagePress/ALS node meta + enable errno; not a claim they work. */
+    PagepressEnableStatus();
     CyttspIdcClass();
     const std::string event = FindTouchEventNode();
     TouchAbsRanges(event);

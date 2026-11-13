@@ -81,6 +81,14 @@ class VoyagePagepressAls(unittest.TestCase):
         self.assertIn('pagepress=', text)
         self.assertIn('als_lux', text)
         self.assertIn('fsr_keypad', text)
+        self.assertIn('pagepress_enable', text)
+        self.assertIn('devnode path=', text)
+
+    def test_voyage_rc_reasserts_dac_after_modules(self):
+        text = RC.read_text(encoding='utf-8')
+        self.assertIn('restorecon /dev/keypad', text)
+        self.assertIn('restorecon /dev/als', text)
+        self.assertIn('chmod 0660 /dev/keypad', text)
 
     def test_fsr_driver_still_defaults_event_enable_false(self):
         """Stock probe stays false; userspace oneshot enables — not a kernel flip."""

@@ -172,31 +172,33 @@ std::string TrimNewline(std::string text) {
     return text;
 }
 
-/* H1: Lab126 zforce2 platform attribute `connected` (0444 show of isConnected).
- * Discovered under /sys/bus/platform/devices/zforce2* — not invented. */
-void ZforceConnected() {
+/* Discover platform sysfs attrs under zforce2* (0444 driver shows). */
+std::string FindZforceSysfs(const char* attr) {
     DIR* directory = opendir("/sys/bus/platform/devices");
-    if (!directory) {
-        Report("zforce_connected status=" + ErrStatus(errno));
-        return;
-    }
+    if (!directory) return {};
     std::string found;
     while (auto* entry = readdir(directory)) {
         const std::string name(entry->d_name);
         if (name.compare(0, 7, "zforce2") != 0) continue;
-        const std::string path = "/sys/bus/platform/devices/" + name + "/connected";
+        const std::string path = "/sys/bus/platform/devices/" + name + "/" + attr;
         if (access(path.c_str(), F_OK) != 0) continue;
         found = path;
         break;
     }
     closedir(directory);
+    return found;
+}
+
+/* Read a decimal u32 sysfs attr; tag is the report field prefix (no raw paths). */
+void ReportZforceU32Attr(const char* tag, const char* attr) {
+    const std::string found = FindZforceSysfs(attr);
     if (found.empty()) {
-        Report("zforce_connected status=absent");
+        Report(std::string(tag) + " status=absent");
         return;
     }
     const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
-        Report("zforce_connected status=" + ErrStatus(errno));
+        Report(std::string(tag) + " status=" + ErrStatus(errno));
         return;
     }
     char buffer[32];
@@ -204,26 +206,73 @@ void ZforceConnected() {
     const int read_err = n < 0 ? errno : 0;
     close(fd);
     if (n < 0) {
-        Report("zforce_connected status=" + ErrStatus(read_err));
+        Report(std::string(tag) + " status=" + ErrStatus(read_err));
         return;
     }
     if (n == 0) {
-        Report("zforce_connected status=empty");
+        Report(std::string(tag) + " status=empty");
         return;
     }
     buffer[n] = 0;
     std::string value = TrimNewline(buffer);
     for (char c : value) {
         if (c < '0' || c > '9') {
-            Report("zforce_connected status=unparseable");
+            Report(std::string(tag) + " status=unparseable");
             return;
         }
     }
-    /* status=ok value=0 is a real not-connected; not the same as absent. */
-    Report("zforce_connected status=ok value=" + value);
+    /* status=ok value=0 is a real zero; not the same as absent. */
+    Report(std::string(tag) + " status=ok value=" + value);
 }
 
-/* H3 static: idc file class for InputReader (touchScreen vs missing). */
+/* H1: Lab126 `connected` = driver full-init success latch (isConnected), NOT the
+ * MCU BootComplete bit. value=0 means initialize()/IRQ never latched success. */
+void ZforceConnected() { ReportZforceU32Attr("zforce_connected", "connected"); }
+
+/* t163u: init_stage / init_status — which initialize() step stopped + ZFStatus.
+ * stage 0..9 codes are fixed in the driver; never raw I2C. */
+void ZforceInitProbe() {
+    ReportZforceU32Attr("zforce_init_stage", "init_stage");
+    ReportZforceU32Attr("zforce_init_status", "init_status");
+}
+
+/* version sysfs: MCU settings response filled only after stage>=7. Report
+ * zero=0|1 only — not firmware identity strings. */
+void ZforceVersionNonzero() {
+    const std::string found = FindZforceSysfs("version");
+    if (found.empty()) {
+        Report("zforce_version status=absent");
+        return;
+    }
+    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        Report("zforce_version status=" + ErrStatus(errno));
+        return;
+    }
+    char buffer[64];
+    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
+    const int read_err = n < 0 ? errno : 0;
+    close(fd);
+    if (n < 0) {
+        Report("zforce_version status=" + ErrStatus(read_err));
+        return;
+    }
+    if (n == 0) {
+        Report("zforce_version status=empty");
+        return;
+    }
+    buffer[n] = 0;
+    /* Default show is "0.0b0r0\n" until sendMcuSettingsRequest succeeds. */
+    unsigned major = 0, minor = 0, build = 0, revision = 0;
+    if (sscanf(buffer, "%u.%ub%ur%u", &major, &minor, &build, &revision) != 4) {
+        Report("zforce_version status=unparseable");
+        return;
+    }
+    const int nonzero = (major | minor | build | revision) != 0;
+    Report(std::string("zforce_version status=ok zero=") + (nonzero ? "0" : "1"));
+}
+
+/* H3 static: idc *file* class only (not a live InputReader probe). */
 void ZforceIdcClass() {
     const char* path = "/system/usr/idc/zforce2.idc";
     const int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
@@ -254,8 +303,9 @@ void ZforceIdcClass() {
     while (*at == ' ' || *at == '\t' || *at == '=') ++at;
     std::string cls;
     while (*at && *at != '\n' && *at != '\r' && cls.size() < 32) cls.push_back(*at++);
-    if (cls.empty()) Report("zforce_idc status=ok class=empty");
-    else Report("zforce_idc status=ok class=" + Clean(cls, 32));
+    /* File contents only — not proof InputReader applied the class at runtime. */
+    if (cls.empty()) Report("zforce_idc status=ok source=file class=empty");
+    else Report("zforce_idc status=ok source=file class=" + Clean(cls, 32));
 }
 
 std::string FindTouchEventNode() {
@@ -465,8 +515,11 @@ void Inputs() {
         closedir(directory);
     }
     Report("input_nodes power=" + std::to_string(power) + " touch=" + std::to_string(touch));
-    /* H1/H2/H3 — name presence above is not event-ready. */
+    /* H1/H2/H3 — name presence above is not event-ready.
+     * t163u: init_stage/status + version zero-bit split initialize() failure. */
     ZforceConnected();
+    ZforceInitProbe();
+    ZforceVersionNonzero();
     ZforceIdcClass();
     const std::string event = FindTouchEventNode();
     ZforceAbsRanges(event);

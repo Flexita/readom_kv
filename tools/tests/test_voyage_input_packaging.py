@@ -91,21 +91,43 @@ class VoyageInputPackaging(unittest.TestCase):
         self.assertIn('module_param_named(dbglog, dbglog, uint, S_IRUGO);', text)
 
     def test_stock_and_android_core_zforce_fsr_sources_match(self):
-        """Official reuse: Voyage android-core drivers are the Lab126 GPL sources."""
-        pairs = [
-            ('drivers/input/touchscreen/zforce2.c', 'drivers/input/touchscreen/zforce2.c'),
-            ('drivers/input/keyboard/fsr_keypad.c', 'drivers/input/keyboard/fsr_keypad.c'),
-            ('include/linux/zforce2.h', 'include/linux/zforce2.h'),
-        ]
+        """Official reuse: Voyage android-core drivers are the Lab126 GPL sources.
+
+        t163u may add only the documented init_stage/init_status probe to
+        zforce2.c (patches/android-core/1058-*). Protocol/I2C paths must stay
+        Lab126-identical aside from those RO sysfs counters.
+        """
         stock = Path('/home/builder/pw3-build/linux-stock')
         android = Path('/home/builder/pw3-build/linux-android-core')
-        if not (stock / pairs[0][0]).is_file() or not (android / pairs[0][0]).is_file():
+        if not (stock / 'drivers/input/touchscreen/zforce2.c').is_file() or not (
+                android / 'drivers/input/touchscreen/zforce2.c').is_file():
             self.skipTest('stock/android-core trees not on host')
-        for rel, _ in pairs:
+        for rel in (
+            'drivers/input/keyboard/fsr_keypad.c',
+            'include/linux/zforce2.h',
+        ):
             self.assertEqual(
                 (stock / rel).read_bytes(),
                 (android / rel).read_bytes(),
                 msg=f'{rel} diverges stock vs android-core')
+        stock_zf = (stock / 'drivers/input/touchscreen/zforce2.c').read_text(
+            encoding='utf-8', errors='replace')
+        and_zf = (android / 'drivers/input/touchscreen/zforce2.c').read_text(
+            encoding='utf-8', errors='replace')
+        if stock_zf == and_zf:
+            return
+        self.assertIn('Voyage touchdiag (t163u)', and_zf)
+        self.assertIn('DEVICE_ATTR(init_stage, 0444', and_zf)
+        self.assertIn('DEVICE_ATTR(init_status, 0444', and_zf)
+        self.assertNotIn('Voyage touchdiag (t163u)', stock_zf)
+        # No FSR / resolution / protocol behavior edits hiding in the delta.
+        for forbidden in (
+            'KEYPAD_IOCTL_EVENT_ENABLE',
+            'X_RESOLUTION =',
+            'Y_RESOLUTION =',
+            'dbglog = 1',
+        ):
+            self.assertNotIn(forbidden, and_zf)
 
     def test_stock_ko_vermagic_differs_from_android81(self):
         """Cannot copy stock .ko into Voyage Android: vermagic / ABI differ."""

@@ -1,0 +1,170 @@
+--- a/drivers/input/touchscreen/zforce2.c
++++ b/drivers/input/touchscreen/zforce2.c
+@@ -63,6 +63,12 @@
+ DEFINE_MUTEX(lowlvl_mutex);       // Low Level Signal mutex
+ DEFINE_MUTEX(stop_mutex);         //protect stop_touch and workqueue delete from reentrance
+ int initSuccess;                  // Initialize successfull
++/* Voyage touchdiag (t163u): last init step + ZFStatus, always visible (dbglog=0).
++ * stage: 0=idle 1=initialize 2=bootcomplete 3=activate 4=resolution
++ *        5=frequency 6=configuration 7=mcu_settings 8=touch_data_req 9=irq_ok
++ * status: ZFStatus at stop (0=ZF_OK). connected stays separate success latch. */
++static u32 zforce_init_stage;
++static u32 zforce_init_status;
+ 
+ /* touch I/O pad gpio configs */
+ static iomux_v3_cfg_t zforce2_suspend_enter_pads[] = {
+@@ -471,6 +477,24 @@
+ static DEVICE_ATTR(connected, 0444, zforce_connected_show, NULL);
+ 
+ static ssize_t
++zforce_init_stage_show(struct device* dev,
++	struct device_attribute* attr,
++	char* buf)
++{
++	return sprintf(buf, "%u\n", zforce_init_stage);
++}
++static DEVICE_ATTR(init_stage, 0444, zforce_init_stage_show, NULL);
++
++static ssize_t
++zforce_init_status_show(struct device* dev,
++	struct device_attribute* attr,
++	char* buf)
++{
++	return sprintf(buf, "%u\n", zforce_init_status);
++}
++static DEVICE_ATTR(init_status, 0444, zforce_init_status_show, NULL);
++
++static ssize_t
+ zforce_version_show(struct device* dev,
+ 	struct device_attribute* attr,
+ 	char* buf)
+@@ -2024,6 +2048,8 @@
+ 	int bootCmpltFailRst = 0;
+ 
+ 	DEBUG_INFO("Initialize...");
++	zforce_init_stage = 1;
++	zforce_init_status = ZF_OK;
+ 
+ 	if (atomic_read(&zforce_data.state) != ZF_STATE_RUN)
+ 		return status;
+@@ -2037,31 +2063,54 @@
+ 			goto rst_retry;
+ 		}
+ 		DEBUG_ERR("\nBoot complete failed %d times..giving up!!\n", bootCmpltFailRst);
++		zforce_init_status = status;
+ 		return status;
+ 	}
++	zforce_init_stage = 2;
+ 
+ 	status = sendActivate();
+-	if (status != ZF_OK)
++	if (status != ZF_OK) {
++		zforce_init_status = status;
+ 		return status;
++	}
++	zforce_init_stage = 3;
+ 
+ 	status = sendSetResolution(X_RESOLUTION, Y_RESOLUTION);
+-	if (status != ZF_OK)
++	if (status != ZF_OK) {
++		zforce_init_status = status;
+ 		return status;
++	}
++	zforce_init_stage = 4;
+ 	status = sendSetScanningFrequency(ZF_IDLE_FREQ, ZF_FULL_FREQ, ZF_FULL_FREQ);
+-	if (status != ZF_OK)
++	if (status != ZF_OK) {
++		zforce_init_status = status;
+ 		return status;
++	}
++	zforce_init_stage = 5;
+ 
+ 	if (unlikely(reltest)) {
+ 		zforce_run_reltests();
+ 	} else {
+ 		status = sendSetConfiguration(ZFORCE_DUAL_TOUCH);
+-		if (status != ZF_OK)
++		if (status != ZF_OK) {
++			zforce_init_status = status;
+ 			return status;
++		}
++		zforce_init_stage = 6;
+ 	        status = sendMcuSettingsRequest();
+-		if (status != ZF_OK)
++		if (status != ZF_OK) {
++			zforce_init_status = status;
+ 			return status;
++		}
++		zforce_init_stage = 7;
+ 	}
+ 	status = sendTouchDataRequest();
++	if (status != ZF_OK) {
++		zforce_init_status = status;
++		return status;
++	}
++	zforce_init_stage = 8;
++	zforce_init_status = ZF_OK;
+ 	return status;
+ }
+ 
+@@ -2095,14 +2144,18 @@
+ 		if (status == ZF_TIMEOUT)
+ 			DEBUG_ERR(ZF_ERR_TIMEOUT);
+ 		DEBUG_ERR(ZF_ERR_INIT);
++		/* stage/status already set inside initialize(); keep connected=0 */
+ 		return;
+ 	}
+ 
+ 	if (zforce_get_touch_irq() != 0) {
+ 		DEBUG_ERR(ZF_ERR_IRQ, zforce_data.irq);
++		zforce_init_status = ZF_ERROR;
+ 		goto out_free_irq;
+ 	}
+ 
++	zforce_init_stage = 9;
++	zforce_init_status = ZF_OK;
+ 	zforce_data.isConnected = 1;
+ 
+ 	/* Let user space know we are here */
+@@ -2127,6 +2180,8 @@
+ 	zforce_data.pdev        = NULL;
+ 	atomic_set(&zforce_data.state, ZF_STATE_STOP);
+ 	zforce_data.irq         = 0;
++	zforce_init_stage       = 0;
++	zforce_init_status      = 0;
+ 	zforce_data.mode        = MODE_I2C;
+ 	zforce_data.ledlvl_ready= 0;
+ 	zforce_data.isConnected = 0;
+@@ -2173,10 +2228,20 @@
+ 		goto out_remove_input_dev;
+ 	}
+ 
++	if (device_create_file(&pdev->dev, &dev_attr_init_stage) < 0) {
++		status = ZF_ERROR;
++		goto out_remove_connect_file;
++	}
++
++	if (device_create_file(&pdev->dev, &dev_attr_init_status) < 0) {
++		status = ZF_ERROR;
++		goto out_remove_init_stage_file;
++	}
++
+ 	if (device_create_file(&pdev->dev, &dev_attr_version) < 0) {
+ 		status = ZF_ERROR;
+ 		DEBUG_ERR(ZF_ERR_VERSION_FILE);
+-		goto out_remove_connect_file;
++		goto out_remove_init_status_file;
+ 	}
+ 
+ 	if (device_create_file(&pdev->dev, &dev_attr_mcusetting) < 0) {
+@@ -2262,6 +2327,10 @@
+ 	device_remove_file(&pdev->dev, &dev_attr_mcusetting);
+ out_remove_version_file:
+ 	device_remove_file(&pdev->dev, &dev_attr_version);
++out_remove_init_status_file:
++	device_remove_file(&pdev->dev, &dev_attr_init_status);
++out_remove_init_stage_file:
++	device_remove_file(&pdev->dev, &dev_attr_init_stage);
+ out_remove_connect_file:
+ 	device_remove_file(&pdev->dev, &dev_attr_connected);
+ out_remove_input_dev:

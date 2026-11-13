@@ -25,6 +25,12 @@ allow pw3_boot_report block_device:dir search;
 r_dir_file(pw3_boot_report, proc)
 r_dir_file(pw3_boot_report, proc_meminfo)
 r_dir_file(pw3_boot_report, sysfs)
+# Voyage touch diagnosis (t160u): read /system/usr/idc/zforce2.idc class only.
+r_dir_file(pw3_boot_report, system_file)
+# Non-blocking observe of /dev/input/event* — read + EVIOCGABS/name only.
+# Code never calls EVIOCGRAB; no write. Counts only, never coordinates.
+allow pw3_boot_report input_device:dir r_dir_perms;
+allow pw3_boot_report input_device:chr_file { getattr open read ioctl };
 allow pw3_boot_report graphics_device:dir search;
 allow pw3_boot_report graphics_device:chr_file { getattr open read ioctl };
 allowxperm pw3_boot_report graphics_device:chr_file ioctl { 0x4600 0x4602 0x4680 };

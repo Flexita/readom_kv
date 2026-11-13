@@ -5,8 +5,10 @@
 #include <log/log.h>
 #include <log/log_read.h>
 #include <linux/fb.h>
+#include <linux/input.h>
 #include <sys/ioctl.h>
 #include <sys/stat.h>
+#include <poll.h>
 #include <time.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -149,6 +151,303 @@ void Memory() {
     const auto buddy = Read("/proc/buddyinfo");
     if (!buddy.empty()) Report("buddy " + Clean(buddy, 360));
 }
+/* Voyage touch diagnosis (H1/H2/H3). Counts and fixed labels only — never
+ * coordinates, trajectories, accounts, or unique device IDs. Missing paths,
+ * permission denials, and timeouts are named; a real zero is status=ok with
+ * count=0. The observe window does not EVIOCGRAB, so InputReader keeps the
+ * stream. Light taps during each window are the only user action needed. */
+constexpr int kTouchObserveMs = 1200;
+unsigned g_touch_syn_total = 0, g_touch_abs_total = 0, g_touch_key_total = 0;
+unsigned g_touch_irq_delta_total = 0;
+unsigned g_touch_observe_rounds = 0;
+
+std::string ErrStatus(int err) {
+    if (err == ENOENT) return "absent";
+    if (err == EACCES || err == EPERM) return "eacces";
+    return "error_errno=" + std::to_string(err);
+}
+
+std::string TrimNewline(std::string text) {
+    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
+    return text;
+}
+
+/* H1: Lab126 zforce2 platform attribute `connected` (0444 show of isConnected).
+ * Discovered under /sys/bus/platform/devices/zforce2* — not invented. */
+void ZforceConnected() {
+    DIR* directory = opendir("/sys/bus/platform/devices");
+    if (!directory) {
+        Report("zforce_connected status=" + ErrStatus(errno));
+        return;
+    }
+    std::string found;
+    while (auto* entry = readdir(directory)) {
+        const std::string name(entry->d_name);
+        if (name.compare(0, 7, "zforce2") != 0) continue;
+        const std::string path = "/sys/bus/platform/devices/" + name + "/connected";
+        if (access(path.c_str(), F_OK) != 0) continue;
+        found = path;
+        break;
+    }
+    closedir(directory);
+    if (found.empty()) {
+        Report("zforce_connected status=absent");
+        return;
+    }
+    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        Report("zforce_connected status=" + ErrStatus(errno));
+        return;
+    }
+    char buffer[32];
+    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
+    const int read_err = n < 0 ? errno : 0;
+    close(fd);
+    if (n < 0) {
+        Report("zforce_connected status=" + ErrStatus(read_err));
+        return;
+    }
+    if (n == 0) {
+        Report("zforce_connected status=empty");
+        return;
+    }
+    buffer[n] = 0;
+    std::string value = TrimNewline(buffer);
+    for (char c : value) {
+        if (c < '0' || c > '9') {
+            Report("zforce_connected status=unparseable");
+            return;
+        }
+    }
+    /* status=ok value=0 is a real not-connected; not the same as absent. */
+    Report("zforce_connected status=ok value=" + value);
+}
+
+/* H3 static: idc file class for InputReader (touchScreen vs missing). */
+void ZforceIdcClass() {
+    const char* path = "/system/usr/idc/zforce2.idc";
+    const int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        Report("zforce_idc status=" + ErrStatus(errno));
+        return;
+    }
+    char buffer[512];
+    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
+    const int read_err = n < 0 ? errno : 0;
+    close(fd);
+    if (n < 0) {
+        Report("zforce_idc status=" + ErrStatus(read_err));
+        return;
+    }
+    if (n == 0) {
+        Report("zforce_idc status=empty");
+        return;
+    }
+    buffer[n] = 0;
+    const char* key = "touch.deviceType";
+    const char* at = strstr(buffer, key);
+    if (!at) {
+        Report("zforce_idc status=ok class=unspecified");
+        return;
+    }
+    at += strlen(key);
+    while (*at == ' ' || *at == '\t' || *at == '=') ++at;
+    std::string cls;
+    while (*at && *at != '\n' && *at != '\r' && cls.size() < 32) cls.push_back(*at++);
+    if (cls.empty()) Report("zforce_idc status=ok class=empty");
+    else Report("zforce_idc status=ok class=" + Clean(cls, 32));
+}
+
+std::string FindTouchEventNode() {
+    DIR* directory = opendir("/sys/class/input");
+    if (!directory) return {};
+    std::string event;
+    while (auto* entry = readdir(directory)) {
+        const std::string name(entry->d_name);
+        if (name.compare(0, 5, "event") || name.size() < 6 ||
+            name.find_first_not_of("0123456789", 5) != std::string::npos) continue;
+        const auto label = Read("/sys/class/input/" + name + "/device/name");
+        if (label == "zforce2\n" || label == "cyttsp4_mt\n") {
+            event = name;
+            break;
+        }
+    }
+    closedir(directory);
+    return event;
+}
+
+/* H3: ABS ranges via EVIOCGABS — min/max only, never a sample coordinate. */
+void ZforceAbsRanges(const std::string& event) {
+    if (event.empty()) {
+        Report("zforce_abs status=absent");
+        return;
+    }
+    const std::string path = "/dev/input/" + event;
+    const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+    if (fd < 0) {
+        Report("zforce_abs status=" + ErrStatus(errno));
+        return;
+    }
+    input_absinfo absx{}, absy{};
+    const int rx = ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X), &absx);
+    const int ex = rx < 0 ? errno : 0;
+    const int ry = ioctl(fd, EVIOCGABS(ABS_MT_POSITION_Y), &absy);
+    const int ey = ry < 0 ? errno : 0;
+    close(fd);
+    if (rx < 0 || ry < 0) {
+        Report("zforce_abs status=" + ErrStatus(rx < 0 ? ex : ey));
+        return;
+    }
+    Report("zforce_abs status=ok x=" + std::to_string(absx.minimum) + ".." +
+           std::to_string(absx.maximum) + " y=" + std::to_string(absy.minimum) + ".." +
+           std::to_string(absy.maximum));
+}
+
+bool ReadZforceIrqCount(unsigned long* value, std::string* status) {
+    const int fd = open("/proc/interrupts", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        *status = ErrStatus(errno);
+        return false;
+    }
+    char buffer[8192];
+    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
+    const int read_err = n < 0 ? errno : 0;
+    close(fd);
+    if (n < 0) {
+        *status = ErrStatus(read_err);
+        return false;
+    }
+    if (n == 0) {
+        *status = "empty";
+        return false;
+    }
+    buffer[n] = 0;
+    /* request_threaded_irq(..., "ZForce2", ...) — match that name only. */
+    const char* line = buffer;
+    while (line && *line) {
+        const char* end = strchr(line, '\n');
+        const size_t len = end ? size_t(end - line) : strlen(line);
+        if (len > 8 && memmem(line, len, "ZForce2", 7)) {
+            /* " 64:       1234  ..." — CPU0 count is the first integer after ':'. */
+            const char* colon = static_cast<const char*>(memchr(line, ':', len));
+            if (!colon) {
+                *status = "unparseable";
+                return false;
+            }
+            char* endptr = nullptr;
+            const unsigned long count = strtoul(colon + 1, &endptr, 10);
+            if (endptr == colon + 1) {
+                *status = "unparseable";
+                return false;
+            }
+            *value = count;
+            *status = "ok";
+            return true;
+        }
+        line = end ? end + 1 : nullptr;
+    }
+    *status = "absent";
+    return false;
+}
+
+/* H2: IRQ delta + non-blocking evdev counts over a short window. No grab. */
+void TouchObserve(const std::string& event) {
+    ++g_touch_observe_rounds;
+    std::string irq_status;
+    unsigned long irq_before = 0, irq_after = 0;
+    const bool irq0 = ReadZforceIrqCount(&irq_before, &irq_status);
+
+    unsigned syn = 0, abs = 0, key = 0, other = 0;
+    std::string ev_status = "skipped";
+    int fd = -1;
+    if (event.empty()) {
+        ev_status = "absent";
+    } else {
+        const std::string path = "/dev/input/" + event;
+        fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
+        if (fd < 0) ev_status = ErrStatus(errno);
+        else ev_status = "ok";
+    }
+
+    timespec start{};
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    while (!deadline_hit) {
+        timespec now{};
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        const int64_t elapsed_ms =
+            (int64_t(now.tv_sec) - int64_t(start.tv_sec)) * 1000 +
+            (now.tv_nsec - start.tv_nsec) / 1000000;
+        if (elapsed_ms >= kTouchObserveMs) break;
+        if (fd >= 0) {
+            pollfd pfd{fd, POLLIN, 0};
+            const int wait = int(kTouchObserveMs - elapsed_ms);
+            const int pr = poll(&pfd, 1, wait > 0 ? wait : 0);
+            if (pr < 0 && errno == EINTR) continue;
+            if (pr <= 0) continue;
+            input_event events[32];
+            const ssize_t bytes = read(fd, events, sizeof(events));
+            if (bytes < 0) {
+                if (errno == EAGAIN || errno == EINTR) continue;
+                ev_status = ErrStatus(errno);
+                break;
+            }
+            if (bytes == 0) continue;
+            if (bytes % ssize_t(sizeof(input_event))) {
+                /* Partial record — stop counting rather than invent values. */
+                ev_status = "short_read";
+                break;
+            }
+            const size_t count = size_t(bytes) / sizeof(input_event);
+            for (size_t i = 0; i < count; ++i) {
+                /* Type counters only — code/value discarded (no coordinates). */
+                switch (events[i].type) {
+                    case EV_SYN: ++syn; break;
+                    case EV_ABS: ++abs; break;
+                    case EV_KEY: ++key; break;
+                    default: ++other; break;
+                }
+            }
+        } else {
+            const int left = int(kTouchObserveMs - elapsed_ms);
+            if (left > 0) usleep(static_cast<useconds_t>((left > 50 ? 50 : left) * 1000));
+        }
+    }
+    if (fd >= 0) close(fd);
+
+    std::string irq_after_status;
+    const bool irq1 = ReadZforceIrqCount(&irq_after, &irq_after_status);
+    unsigned irq_delta = 0;
+    if (deadline_hit) {
+        Report("touch_observe status=timeout window_ms=" + std::to_string(kTouchObserveMs));
+    }
+    if (!irq0) {
+        Report("zforce_irq status=" + irq_status + " delta=na");
+    } else if (!irq1) {
+        Report("zforce_irq status=" + irq_after_status + " delta=na");
+    } else {
+        irq_delta = irq_after >= irq_before ? unsigned(irq_after - irq_before) : 0;
+        g_touch_irq_delta_total += irq_delta;
+        Report("zforce_irq status=ok delta=" + std::to_string(irq_delta) +
+               " total_delta=" + std::to_string(g_touch_irq_delta_total));
+    }
+
+    if (ev_status == "ok") {
+        g_touch_syn_total += syn;
+        g_touch_abs_total += abs;
+        g_touch_key_total += key;
+    }
+    Report("touch_evdev status=" + ev_status +
+           " window_ms=" + std::to_string(kTouchObserveMs) +
+           " syn=" + std::to_string(syn) +
+           " abs=" + std::to_string(abs) +
+           " key=" + std::to_string(key) +
+           " other=" + std::to_string(other) +
+           " syn_total=" + std::to_string(g_touch_syn_total) +
+           " abs_total=" + std::to_string(g_touch_abs_total) +
+           " key_total=" + std::to_string(g_touch_key_total) +
+           " rounds=" + std::to_string(g_touch_observe_rounds));
+}
+
 void Inputs() {
     DIR* directory = opendir("/sys/class/input");
     bool power = false, touch = false; unsigned checked = 0;
@@ -166,6 +465,12 @@ void Inputs() {
         closedir(directory);
     }
     Report("input_nodes power=" + std::to_string(power) + " touch=" + std::to_string(touch));
+    /* H1/H2/H3 — name presence above is not event-ready. */
+    ZforceConnected();
+    ZforceIdcClass();
+    const std::string event = FindTouchEventNode();
+    ZforceAbsRanges(event);
+    TouchObserve(event);
 }
 void Framebuffer() {
     const int fd = open("/dev/graphics/fb0", O_RDONLY | O_CLOEXEC);
@@ -365,7 +670,8 @@ int main(int argc,char** argv) {
     for(unsigned round=0;round<(once?1U:4U) && !deadline_hit;++round) {
         sleep(delays[round]);
         if (sigsetjmp(deadline,1)) break;
-        alarm(5);
+        /* 8s: Inputs() includes a 1.2s non-blocking touch observe window. */
+        alarm(8);
         Properties(round);Memory();Inputs();Framebuffer();Errors();
         alarm(0);
     }

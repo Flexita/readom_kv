@@ -69,6 +69,88 @@ class VoyageInputPackaging(unittest.TestCase):
         self.assertIn('g_keypad.event_enable = false;', text)
         self.assertIn('KEYPAD_IOCTL_EVENT_ENABLE', text)
 
+    def test_fsr_event_enable_is_set_only_ioctl_no_get(self):
+        """Stock Lab126 contract: enable is write-only; BootReport cannot sample it."""
+        hdr = Path('/home/builder/pw3-build/linux-android-core/include/linux/lab126_keypad.h')
+        if not hdr.is_file():
+            self.skipTest('lab126_keypad.h not on host')
+        text = hdr.read_text()
+        self.assertIn('KEYPAD_IOCTL_EVENT_ENABLE', text)
+        self.assertIn('KEYPAD_IOCTL_TOUCH_ACTIVE', text)
+        self.assertIn('PATH_DEV_KEYPAD', text)
+        self.assertNotIn('EVENT_ENABLE_GET', text)
+        self.assertNotIn('GET_EVENT_ENABLE', text)
+
+    def test_zforce_dbglog_defaults_off(self):
+        """Without dbglog=1, I/E zforce: lines never hit the ring — silence ≠ failure."""
+        src = Path('/home/builder/pw3-build/linux-android-core/drivers/input/touchscreen/zforce2.c')
+        if not src.is_file():
+            self.skipTest('zforce2.c not on host')
+        text = src.read_text()
+        self.assertIn('static uint dbglog = 0;', text)
+        self.assertIn('module_param_named(dbglog, dbglog, uint, S_IRUGO);', text)
+
+    def test_stock_and_android_core_zforce_fsr_sources_match(self):
+        """Official reuse: Voyage android-core drivers are the Lab126 GPL sources."""
+        pairs = [
+            ('drivers/input/touchscreen/zforce2.c', 'drivers/input/touchscreen/zforce2.c'),
+            ('drivers/input/keyboard/fsr_keypad.c', 'drivers/input/keyboard/fsr_keypad.c'),
+            ('include/linux/zforce2.h', 'include/linux/zforce2.h'),
+        ]
+        stock = Path('/home/builder/pw3-build/linux-stock')
+        android = Path('/home/builder/pw3-build/linux-android-core')
+        if not (stock / pairs[0][0]).is_file() or not (android / pairs[0][0]).is_file():
+            self.skipTest('stock/android-core trees not on host')
+        for rel, _ in pairs:
+            self.assertEqual(
+                (stock / rel).read_bytes(),
+                (android / rel).read_bytes(),
+                msg=f'{rel} diverges stock vs android-core')
+
+    def test_stock_ko_vermagic_differs_from_android81(self):
+        """Cannot copy stock .ko into Voyage Android: vermagic / ABI differ."""
+        import subprocess
+        stock_ko = Path('/home/builder/pw3-build/out-stock-voyage/drivers/input/touchscreen/zforce2.ko')
+        and_ko = Path(
+            '/tmp/voyage-mod-compare/lib/modules/3.0.35-lab126-voyage-android81'
+            '/kernel/drivers/input/touchscreen/zforce2.ko')
+        if not stock_ko.is_file():
+            self.skipTest('stock zforce2.ko not on host')
+        if not and_ko.is_file():
+            # Extract once from the private modules tar when present.
+            tar = Path('/mnt/build-share/android-core-kernel-voyage/modules.tar.gz')
+            if not tar.is_file():
+                self.skipTest('android81 zforce2.ko not on host')
+            and_ko.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.check_call(
+                ['tar', '-xzf', str(tar), '-C', '/tmp/voyage-mod-compare',
+                 'lib/modules/3.0.35-lab126-voyage-android81/kernel/drivers/input/touchscreen/zforce2.ko'])
+        stock_v = subprocess.check_output(['modinfo', '-F', 'vermagic', str(stock_ko)], text=True).strip()
+        and_v = subprocess.check_output(['modinfo', '-F', 'vermagic', str(and_ko)], text=True).strip()
+        self.assertIn('3.0.35-lab126', stock_v)
+        self.assertIn('voyage-android81', and_v)
+        self.assertNotEqual(stock_v, and_v)
+
+    def test_fsr_fw_header_is_empty_stub(self):
+        """GPL tree does not ship KL05 app firmware; normal boot uses on-MCU ROM."""
+        fw = Path('/home/builder/pw3-build/linux-android-core/drivers/input/keyboard/fsr_fw.h')
+        if not fw.is_file():
+            self.skipTest('fsr_fw.h not on host')
+        text = fw.read_text()
+        self.assertIn('u8 fsr_fw_img[] = {};', text)
+        self.assertIn('fw_lines = 0', text)
+
+    def test_userlog_allow_omits_zforce_and_fsr_prefixes(self):
+        """Courtesy previous-kernel cannot show digitizer init under today's filter."""
+        userlog = ROOT / 'boot/launcher/userlog.c'
+        text = userlog.read_text()
+        start = text.index('static const char *const ALLOW[]')
+        end = text.index('};', start)
+        allow = text[start:end]
+        for forbidden in ('zforce', 'fsr:', 'fsr_keypad', 'I zforce', 'E zforce'):
+            self.assertNotIn(f'"{forbidden}', allow)
+            self.assertNotIn(f'"{forbidden}"', allow)
+
     def test_zforce_header_resolution_is_not_voyage_panel(self):
         # Static mismatch to document: packed ko uses 600x800; Voyage panel 1448x1072.
         if not ZF_HDR.is_file():

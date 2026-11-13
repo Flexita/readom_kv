@@ -175,6 +175,17 @@ static int test_filter(void)
 	CHECK(!keep("<4>[   51.000000] Thread-73 (5550) segfault at 0 ip 00000000"));
 	CHECK(!keep("<6>[   52.000000] CCM: vaddr f40c4000, va 0xf40c4200 pa 0x20110c3"));
 
+	/* Voyage digitizer / FSR driver tags are not on the allow-list. A filtered
+	 * previous-kernel.txt therefore cannot prove MCU init or IRQ by absence:
+	 * even with dbglog=1 these lines are dropped until ALLOW is extended. */
+	CHECK(!keep("<6>[   12.000000] I zforce:Initialize..."));
+	CHECK(!keep("<3>[   12.000000] E zforce:init:Could not initialize device"));
+	CHECK(!keep("<6>[   12.000000] fsr:power on completed"));
+	CHECK(!keep("<3>[   12.000000] fsr_config: n_adc=6, adc_depth=16, app_ver=1, n_buttons=4, flash=0"));
+	CHECK(!keep("<3>[   12.000000] fsr_keypad:trying to access flash in app mode!!"));
+	/* A pw3- tag that mentions the module name is kept (project-owned text). */
+	CHECK(keep("<6>[   12.000000] pw3-hardware: zforce2 loaded"));
+
 	/* A line with no level or timestamp, and the empty line. */
 	CHECK(keep("PM: suspend entry"));
 	CHECK(!keep(""));

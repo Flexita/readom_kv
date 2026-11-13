@@ -285,11 +285,102 @@ void ReportZforceStatusAttr(const char* tag, const char* attr) {
     Report(std::string(tag) + " status=ok value=" + value + " name=" + ZfStatusName(v));
 }
 
-/* t163u/t166u: init_stage / init_status — which initialize() step stopped +
- * ZFStatus (with name=). Never raw I2C. */
+/* Read a small sysfs text line (digits/spaces/=/- only); tag prefix only. */
+void ReportZforceTextAttr(const char* tag, const char* attr, size_t max_keep) {
+    const std::string found = FindZforceSysfs(attr);
+    if (found.empty()) {
+        Report(std::string(tag) + " status=absent");
+        return;
+    }
+    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        Report(std::string(tag) + " status=" + ErrStatus(errno));
+        return;
+    }
+    char buffer[96];
+    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
+    const int read_err = n < 0 ? errno : 0;
+    close(fd);
+    if (n < 0) {
+        Report(std::string(tag) + " status=" + ErrStatus(read_err));
+        return;
+    }
+    if (n == 0) {
+        Report(std::string(tag) + " status=empty");
+        return;
+    }
+    buffer[n] = 0;
+    std::string value = TrimNewline(buffer);
+    if (value.size() > max_keep) value.resize(max_keep);
+    for (char c : value) {
+        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
+              c == '=' || c == ' ' || c == '-' || c == '_')) {
+            Report(std::string(tag) + " status=unparseable");
+            return;
+        }
+    }
+    Report(std::string(tag) + " status=ok value=" + value);
+}
+
+const char* I2cFaultName(unsigned v) {
+    switch (v) {
+    case 0: return "none";
+    case 1: return "header_read";
+    case 2: return "bad_frame_start";
+    case 3: return "body_read";
+    default: return "unknown";
+    }
+}
+
+void ReportZforceI2cFaultU32(const char* tag, const char* attr) {
+    const std::string found = FindZforceSysfs(attr);
+    if (found.empty()) {
+        Report(std::string(tag) + " status=absent");
+        return;
+    }
+    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        Report(std::string(tag) + " status=" + ErrStatus(errno));
+        return;
+    }
+    char buffer[32];
+    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
+    const int read_err = n < 0 ? errno : 0;
+    close(fd);
+    if (n < 0) {
+        Report(std::string(tag) + " status=" + ErrStatus(read_err));
+        return;
+    }
+    if (n == 0) {
+        Report(std::string(tag) + " status=empty");
+        return;
+    }
+    buffer[n] = 0;
+    std::string value = TrimNewline(buffer);
+    for (char c : value) {
+        if (c < '0' || c > '9') {
+            Report(std::string(tag) + " status=unparseable");
+            return;
+        }
+    }
+    unsigned v = 0;
+    for (char c : value) v = v * 10u + unsigned(c - '0');
+    /* value=0 is real none/cleared-last; absent means sysfs missing. */
+    Report(std::string(tag) + " status=ok value=" + value + " name=" + I2cFaultName(v));
+}
+
+/* t163u/t166u/t167u: stage/status + i2c_fault last/first/count/cleared/xfer.
+ * Never raw I2C payload. Semantics: never-observed first=0 count=0 cleared=0;
+ * multi-retry accumulates count/n1..n3; success after faults → cleared=1 last=0. */
 void ZforceInitProbe() {
     ReportZforceU32Attr("zforce_init_stage", "init_stage");
     ReportZforceStatusAttr("zforce_init_status", "init_status");
+    ReportZforceI2cFaultU32("zforce_i2c_fault", "init_i2c_fault");
+    ReportZforceI2cFaultU32("zforce_i2c_fault_first", "init_i2c_fault_first");
+    ReportZforceU32Attr("zforce_i2c_fault_count", "init_i2c_fault_count");
+    ReportZforceTextAttr("zforce_i2c_fault_counts", "init_i2c_fault_counts", 48);
+    ReportZforceU32Attr("zforce_i2c_fault_cleared", "init_i2c_fault_cleared");
+    ReportZforceTextAttr("zforce_i2c_xfer", "init_i2c_xfer", 48);
 }
 
 /* version sysfs: MCU settings response filled only after stage>=7. Report

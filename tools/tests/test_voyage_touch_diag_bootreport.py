@@ -17,9 +17,9 @@ SEPOLICY = ROOT / 'device/amazon/pw3/sepolicy/pw3_boot_report.te'
 ZF_DRV = Path('/home/builder/pw3-build/linux-android-core/drivers/input/touchscreen/zforce2.c')
 PACKED = Path('/tmp/sys-audit-zforce-touchdiag/pw3-boot-report')
 SYSTEM_RAW = Path(
-    '/mnt/build-share/voyage-experimental-PRIVATE-candidate-zforce-initstage-20261113/export/system.raw.img')
+    '/mnt/build-share/voyage-experimental-PRIVATE-candidate-zforce-i2cfault-20261113/export/system.raw.img')
 SYSTEM_RAW_FALLBACK = Path(
-    '/mnt/build-share/voyage-experimental-PRIVATE-candidate-zforce-touchdiag-20261113/export/system.raw.img')
+    '/mnt/build-share/voyage-experimental-PRIVATE-candidate-zforce-initstage-20261113/export/system.raw.img')
 
 
 class VoyageTouchDiagBootReport(unittest.TestCase):
@@ -38,6 +38,8 @@ class VoyageTouchDiagBootReport(unittest.TestCase):
             'source=file',
             'ZF_ERR_FORCE_RST',
             'name=',
+            'zforce_i2c_fault',
+            'header_read',
             'kTouchObserveMs = 1200',
             'status=absent',
             'return "eacces"',
@@ -117,7 +119,7 @@ class VoyageTouchDiagBootReport(unittest.TestCase):
         if SYSTEM_RAW.is_file():
             for tag in (b'zforce_connected', b'zforce_abs', b'touch_evdev', b'zforce_irq',
                         b'zforce_idc', b'zforce_init_stage', b'zforce_init_status',
-                        b'zforce_version'):
+                        b'zforce_version', b'zforce_i2c_fault', b'zforce_i2c_xfer'):
                 self.assertIn(tag, blob)
             self.assertNotIn(b'EVIOCGRAB', blob)
 

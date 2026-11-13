@@ -1,0 +1,251 @@
+--- a/drivers/input/touchscreen/zforce2.c
++++ b/drivers/input/touchscreen/zforce2.c
+@@ -69,6 +69,22 @@
+  * status: ZFStatus at stop (0=ZF_OK). connected stays separate success latch. */
+ static u32 zforce_init_stage;
+ static u32 zforce_init_status;
++/* t167u: which processData FORCE_RST path fired (no raw frames).
++ * 0=none  1=header_read_fail  2=bad_frame_start  3=body_read_fail
++ * first/count/n1..n3 accumulate across BootComplete bslReset retries;
++ * last is most recent; cleared=1 iff BootComplete later succeeded after faults.
++ * never-observed: first=0 count=0 cleared=0 last=0. */
++static u32 zforce_i2c_fault_last;
++static u32 zforce_i2c_fault_first;
++static u32 zforce_i2c_fault_count;
++static u32 zforce_i2c_fault_n1;
++static u32 zforce_i2c_fault_n2;
++static u32 zforce_i2c_fault_n3;
++static u32 zforce_i2c_fault_cleared;
++static int zforce_i2c_last_xfer_ret;
++static u32 zforce_i2c_last_len_exp;
++static u32 zforce_i2c_last_len_got;
++static int zforce_read_last_ret; /* last i2c_transfer return from zforce_read */
+ 
+ /* touch I/O pad gpio configs */
+ static iomux_v3_cfg_t zforce2_suspend_enter_pads[] = {
+@@ -495,6 +511,63 @@
+ static DEVICE_ATTR(init_status, 0444, zforce_init_status_show, NULL);
+ 
+ static ssize_t
++zforce_i2c_fault_show(struct device* dev,
++	struct device_attribute* attr,
++	char* buf)
++{
++	return sprintf(buf, "%u\n", zforce_i2c_fault_last);
++}
++static DEVICE_ATTR(init_i2c_fault, 0444, zforce_i2c_fault_show, NULL);
++
++static ssize_t
++zforce_i2c_fault_first_show(struct device* dev,
++	struct device_attribute* attr,
++	char* buf)
++{
++	return sprintf(buf, "%u\n", zforce_i2c_fault_first);
++}
++static DEVICE_ATTR(init_i2c_fault_first, 0444, zforce_i2c_fault_first_show, NULL);
++
++static ssize_t
++zforce_i2c_fault_count_show(struct device* dev,
++	struct device_attribute* attr,
++	char* buf)
++{
++	return sprintf(buf, "%u\n", zforce_i2c_fault_count);
++}
++static DEVICE_ATTR(init_i2c_fault_count, 0444, zforce_i2c_fault_count_show, NULL);
++
++static ssize_t
++zforce_i2c_fault_counts_show(struct device* dev,
++	struct device_attribute* attr,
++	char* buf)
++{
++	return sprintf(buf, "n1=%u n2=%u n3=%u\n",
++		zforce_i2c_fault_n1, zforce_i2c_fault_n2, zforce_i2c_fault_n3);
++}
++static DEVICE_ATTR(init_i2c_fault_counts, 0444, zforce_i2c_fault_counts_show, NULL);
++
++static ssize_t
++zforce_i2c_fault_cleared_show(struct device* dev,
++	struct device_attribute* attr,
++	char* buf)
++{
++	return sprintf(buf, "%u\n", zforce_i2c_fault_cleared);
++}
++static DEVICE_ATTR(init_i2c_fault_cleared, 0444, zforce_i2c_fault_cleared_show, NULL);
++
++static ssize_t
++zforce_i2c_xfer_show(struct device* dev,
++	struct device_attribute* attr,
++	char* buf)
++{
++	/* ret: i2c_transfer return (neg errno or msg count). No payload bytes. */
++	return sprintf(buf, "ret=%d exp=%u got=%u\n",
++		zforce_i2c_last_xfer_ret, zforce_i2c_last_len_exp, zforce_i2c_last_len_got);
++}
++static DEVICE_ATTR(init_i2c_xfer, 0444, zforce_i2c_xfer_show, NULL);
++
++static ssize_t
+ zforce_version_show(struct device* dev,
+ 	struct device_attribute* attr,
+ 	char* buf)
+@@ -1079,6 +1152,24 @@
+ 	.resume = zforce_i2c_resume,
+ };
+ 
++static void zforce_note_i2c_fault(u32 code, int xfer_ret, u32 len_exp, u32 len_got)
++{
++	zforce_i2c_fault_last = code;
++	if (!zforce_i2c_fault_first)
++		zforce_i2c_fault_first = code;
++	zforce_i2c_fault_count++;
++	if (code == 1)
++		zforce_i2c_fault_n1++;
++	else if (code == 2)
++		zforce_i2c_fault_n2++;
++	else if (code == 3)
++		zforce_i2c_fault_n3++;
++	zforce_i2c_last_xfer_ret = xfer_ret;
++	zforce_i2c_last_len_exp = len_exp;
++	zforce_i2c_last_len_got = len_got;
++	zforce_i2c_fault_cleared = 0;
++}
++
+ static inline unsigned int zforce_read(u8* data, int len)
+ {
+ 	struct i2c_msg xfer[1];
+@@ -1090,6 +1181,7 @@
+ 	xfer[0].buf = data;
+ 
+ 	ret = i2c_transfer(zforce_i2c_client->adapter, xfer, 1);
++	zforce_read_last_ret = ret;
+ 	if (ret != 1 || ret < 0) {
+ 		DEBUG_ERR(ZF_ERR_IO_READ);
+ 		return 0;
+@@ -1444,6 +1536,8 @@
+ 	if(!zforce_read(frameHeader, ZFORCE_HEADER_SIZE))
+ 	{
+ 		DEBUG_ERR(ZF_ERR_FRAME_HEADER);
++		/* fault=1: header read fail — xfer_ret <0 errno or !=1; got=0 */
++		zforce_note_i2c_fault(1, zforce_read_last_ret, ZFORCE_HEADER_SIZE, 0);
+ 		*result = ZF_ERR_FORCE_RST;
+ 		return;
+ 	}
+@@ -1455,6 +1549,8 @@
+ 	{
+ 		DEBUG_ERR(ZF_ERR_START_FRAME, frameHeader[ZFORCE_FRAME_START_IDX], frameHeader[ZFORCE_FRAME_SIZE_IDX]);
+ 		DEBUG_ERR(ZF_ERR_IO_READ);
++		/* fault=2: header bytes read but start != 0xEE (no payload logged) */
++		zforce_note_i2c_fault(2, zforce_read_last_ret, ZFORCE_HEADER_SIZE, ZFORCE_HEADER_SIZE);
+ 		*result = ZF_ERR_FORCE_RST;
+ 		return;
+ 	}
+@@ -1475,6 +1571,8 @@
+ 	{
+ 		DEBUG_ERR(ZF_ERR_READ_DATA);
+ 		kfree(data);
++		/* fault=3: body read fail after valid header start */
++		zforce_note_i2c_fault(3, zforce_read_last_ret, (u32)frameSize, 0);
+ 		*result = ZF_ERR_FORCE_RST;
+ 		return;
+ 	}
+@@ -2050,6 +2148,17 @@
+ 	DEBUG_INFO("Initialize...");
+ 	zforce_init_stage = 1;
+ 	zforce_init_status = ZF_OK;
++	/* Fresh initialize() session: clear fault history. Retries inside keep counts. */
++	zforce_i2c_fault_last = 0;
++	zforce_i2c_fault_first = 0;
++	zforce_i2c_fault_count = 0;
++	zforce_i2c_fault_n1 = 0;
++	zforce_i2c_fault_n2 = 0;
++	zforce_i2c_fault_n3 = 0;
++	zforce_i2c_fault_cleared = 0;
++	zforce_i2c_last_xfer_ret = 0;
++	zforce_i2c_last_len_exp = 0;
++	zforce_i2c_last_len_got = 0;
+ 
+ 	if (atomic_read(&zforce_data.state) != ZF_STATE_RUN)
+ 		return status;
+@@ -2066,6 +2175,10 @@
+ 		zforce_init_status = status;
+ 		return status;
+ 	}
++	/* BootComplete OK: last fault cleared; first/count retained for history */
++	if (zforce_i2c_fault_count)
++		zforce_i2c_fault_cleared = 1;
++	zforce_i2c_fault_last = 0;
+ 	zforce_init_stage = 2;
+ 
+ 	status = sendActivate();
+@@ -2182,6 +2295,16 @@
+ 	zforce_data.irq         = 0;
+ 	zforce_init_stage       = 0;
+ 	zforce_init_status      = 0;
++	zforce_i2c_fault_last   = 0;
++	zforce_i2c_fault_first  = 0;
++	zforce_i2c_fault_count  = 0;
++	zforce_i2c_fault_n1     = 0;
++	zforce_i2c_fault_n2     = 0;
++	zforce_i2c_fault_n3     = 0;
++	zforce_i2c_fault_cleared = 0;
++	zforce_i2c_last_xfer_ret = 0;
++	zforce_i2c_last_len_exp = 0;
++	zforce_i2c_last_len_got = 0;
+ 	zforce_data.mode        = MODE_I2C;
+ 	zforce_data.ledlvl_ready= 0;
+ 	zforce_data.isConnected = 0;
+@@ -2238,10 +2361,35 @@
+ 		goto out_remove_init_stage_file;
+ 	}
+ 
++	if (device_create_file(&pdev->dev, &dev_attr_init_i2c_fault) < 0) {
++		status = ZF_ERROR;
++		goto out_remove_init_status_file;
++	}
++	if (device_create_file(&pdev->dev, &dev_attr_init_i2c_fault_first) < 0) {
++		status = ZF_ERROR;
++		goto out_remove_i2c_fault_file;
++	}
++	if (device_create_file(&pdev->dev, &dev_attr_init_i2c_fault_count) < 0) {
++		status = ZF_ERROR;
++		goto out_remove_i2c_fault_first_file;
++	}
++	if (device_create_file(&pdev->dev, &dev_attr_init_i2c_fault_counts) < 0) {
++		status = ZF_ERROR;
++		goto out_remove_i2c_fault_count_file;
++	}
++	if (device_create_file(&pdev->dev, &dev_attr_init_i2c_fault_cleared) < 0) {
++		status = ZF_ERROR;
++		goto out_remove_i2c_fault_counts_file;
++	}
++	if (device_create_file(&pdev->dev, &dev_attr_init_i2c_xfer) < 0) {
++		status = ZF_ERROR;
++		goto out_remove_i2c_fault_cleared_file;
++	}
++
+ 	if (device_create_file(&pdev->dev, &dev_attr_version) < 0) {
+ 		status = ZF_ERROR;
+ 		DEBUG_ERR(ZF_ERR_VERSION_FILE);
+-		goto out_remove_init_status_file;
++		goto out_remove_i2c_xfer_file;
+ 	}
+ 
+ 	if (device_create_file(&pdev->dev, &dev_attr_mcusetting) < 0) {
+@@ -2327,6 +2475,18 @@
+ 	device_remove_file(&pdev->dev, &dev_attr_mcusetting);
+ out_remove_version_file:
+ 	device_remove_file(&pdev->dev, &dev_attr_version);
++out_remove_i2c_xfer_file:
++	device_remove_file(&pdev->dev, &dev_attr_init_i2c_xfer);
++out_remove_i2c_fault_cleared_file:
++	device_remove_file(&pdev->dev, &dev_attr_init_i2c_fault_cleared);
++out_remove_i2c_fault_counts_file:
++	device_remove_file(&pdev->dev, &dev_attr_init_i2c_fault_counts);
++out_remove_i2c_fault_count_file:
++	device_remove_file(&pdev->dev, &dev_attr_init_i2c_fault_count);
++out_remove_i2c_fault_first_file:
++	device_remove_file(&pdev->dev, &dev_attr_init_i2c_fault_first);
++out_remove_i2c_fault_file:
++	device_remove_file(&pdev->dev, &dev_attr_init_i2c_fault);
+ out_remove_init_status_file:
+ 	device_remove_file(&pdev->dev, &dev_attr_init_status);
+ out_remove_init_stage_file:

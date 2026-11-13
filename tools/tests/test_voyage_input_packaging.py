@@ -119,6 +119,8 @@ class VoyageInputPackaging(unittest.TestCase):
         self.assertIn('Voyage touchdiag (t163u)', and_zf)
         self.assertIn('DEVICE_ATTR(init_stage, 0444', and_zf)
         self.assertIn('DEVICE_ATTR(init_status, 0444', and_zf)
+        self.assertIn('DEVICE_ATTR(init_i2c_fault, 0444', and_zf)
+        self.assertIn('zforce_note_i2c_fault(1,', and_zf)
         self.assertNotIn('Voyage touchdiag (t163u)', stock_zf)
         # No FSR / resolution / protocol behavior edits hiding in the delta.
         for forbidden in (

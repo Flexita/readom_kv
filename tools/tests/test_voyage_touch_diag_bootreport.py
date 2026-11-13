@@ -36,6 +36,8 @@ class VoyageTouchDiagBootReport(unittest.TestCase):
             'zforce_version status=',
             'zero=',
             'source=file',
+            'ZF_ERR_FORCE_RST',
+            'name=',
             'kTouchObserveMs = 1200',
             'status=absent',
             'return "eacces"',

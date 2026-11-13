@@ -24,12 +24,11 @@ allow pw3_boot_report block_device:dir search;
 # from the area above it cannot alter devices, properties, mounts or modules.
 r_dir_file(pw3_boot_report, proc)
 r_dir_file(pw3_boot_report, proc_meminfo)
-# Voyage touchdiag (t163u): /proc/interrupts is typed proc_interrupts, not plain
-# proc — without this, BootReport reports eacces even when the file is world-readable.
-# Counts only (ZForce2 line delta); never opens input devices for grab.
+# Voyage touchdiag: /proc/interrupts is typed proc_interrupts, not plain proc.
+# Counts only (cyttsp IRQ line delta); never opens input devices for grab.
 allow pw3_boot_report proc_interrupts:file r_file_perms;
 r_dir_file(pw3_boot_report, sysfs)
-# Voyage touch diagnosis (t160u): read /system/usr/idc/zforce2.idc class only.
+# Read /system/usr/idc/cyttsp4_mt.idc class only (file contents ≠ InputReader).
 r_dir_file(pw3_boot_report, system_file)
 # Non-blocking observe of /dev/input/event* — read + EVIOCGABS/name only.
 # Code never calls EVIOCGRAB; no write. Counts only, never coordinates.

@@ -58,15 +58,17 @@ class VoyageZforceInitStatusEnum(unittest.TestCase):
         self.assertIn('zforce_init_stage = 1;', text)
         self.assertIn('if((status = getBootComplete()) != ZF_OK)', text)
 
-    def test_bootreport_names_full_zfstatus_including_six(self):
+    def test_bootreport_no_longer_maps_zfstatus(self):
+        """t172u: BootReport is Cypress; ZFStatus ordinals stay locked in the header."""
         text = BOOT.read_text(encoding='utf-8')
-        self.assertIn('ZF_ERR_FORCE_RST', text)
-        self.assertIn('case 6: return "ZF_ERR_FORCE_RST"', text)
-        self.assertIn('name=', text)
-        # Must not document a truncated 0..4-only table as complete.
-        self.assertIn('5 ZF_FORCE_EXIT', text)
-        self.assertIn('6 ZF_ERR_FORCE_RST', text)
-        self.assertIn('7 ZF_CONTINUE', text)
+        self.assertNotIn('ZF_ERR_FORCE_RST', text)
+        self.assertNotIn('case 6: return "ZF_ERR_FORCE_RST"', text)
+        self.assertIn('cyttsp4_mt', text)
+        if HDR.is_file():
+            hdr = HDR.read_text(encoding='utf-8', errors='replace')
+            self.assertIn('ZF_ERR_FORCE_RST', hdr)
+            self.assertIn('ZF_FORCE_EXIT', hdr)
+            self.assertIn('ZF_CONTINUE', hdr)
 
 
 if __name__ == '__main__':

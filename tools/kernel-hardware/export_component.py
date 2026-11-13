@@ -27,8 +27,9 @@ SHARED_MODULES={
  'arcotg_udc':'kernel/drivers/usb/gadget/arcotg_udc.ko',
  'g_android':'kernel/drivers/usb/gadget/g_android.ko',
 }
-# PW3 (celeste): Cypress cyttsp4. Voyage (icewine): Neonode zforce2 + FSR keys.
-# Do not install both touch stacks into one image's load path.
+# PW3 (celeste) and Voyage (icewine): Cypress cyttsp4 @ I2C 0x24.
+# Voyage also ships PagePress (fsr_keypad) + DRV26xx haptics — not the digitizer.
+# Do not install zforce2 into the Voyage load path (wrong chip / wrong address).
 PW3_TOUCH_MODULES={
  'cyttsp4_core':'kernel/drivers/input/touchscreen/cyttsp4_core.ko',
  'cyttsp4_i2c':'kernel/drivers/input/touchscreen/cyttsp4_i2c.ko',
@@ -37,7 +38,9 @@ PW3_TOUCH_MODULES={
 VOYAGE_TOUCH_MODULES={
  'drv26xx_haptics':'kernel/drivers/input/keyboard/drv26xx_haptics.ko',
  'fsr_keypad':'kernel/drivers/input/keyboard/fsr_keypad.ko',
- 'zforce2':'kernel/drivers/input/touchscreen/zforce2.ko',
+ 'cyttsp4_core':'kernel/drivers/input/touchscreen/cyttsp4_core.ko',
+ 'cyttsp4_i2c':'kernel/drivers/input/touchscreen/cyttsp4_i2c.ko',
+ 'cyttsp4_mt_b':'kernel/drivers/input/touchscreen/cyttsp4_mt_b.ko',
 }
 # Default MODULES keeps PW3 exporter/tests unchanged.
 MODULES={**PW3_TOUCH_MODULES, **SHARED_MODULES}
@@ -60,7 +63,8 @@ PW3_TOUCH_CONFIG={
  'CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_INCLUDE_FW':'n','CONFIG_TOUCHSCREEN_CYPRESS_CYTTSP4_AUTO_LOAD_TOUCH_PARAMS':'n',
 }
 VOYAGE_TOUCH_CONFIG={
- 'CONFIG_TOUCHSCREEN_ZFORCE2':'m','CONFIG_KEYBOARD_FSR':'m',
+ **PW3_TOUCH_CONFIG,
+ 'CONFIG_KEYBOARD_FSR':'m',
 }
 CONFIG={**SHARED_CONFIG, **PW3_TOUCH_CONFIG}
 RELOCS={2:'R_ARM_ABS32',28:'R_ARM_CALL',43:'R_ARM_MOVW_ABS_NC',44:'R_ARM_MOVT_ABS'}
@@ -83,7 +87,8 @@ def model_hardware_rc(model):
 def model_boot_order(model):
     if model=='pw3':
         return [['cyttsp4_core','cyttsp4_i2c','cyttsp4_mt_b','cfg80211'],['mxc_epdc_fb']]
-    return [['drv26xx_haptics','fsr_keypad','zforce2','cfg80211'],['mxc_epdc_fb']]
+    return [['drv26xx_haptics','fsr_keypad','cyttsp4_core','cyttsp4_i2c','cyttsp4_mt_b','cfg80211'],
+            ['mxc_epdc_fb']]
 
 def elf(data):
     if len(data)<52 or data[:6]!=b'\x7fELF\x01\x01': fail('Expected ELF32 little-endian module')
@@ -252,7 +257,7 @@ PRODUCT_COPY_FILES += \\
             'usb_default':'every boot: MTP; adb only when Android turns it on (developer options), with authentication',
             'serial':'16 bytes from urandom once per device, hex encoded, kept in persist.pw3.usb.serial; no factory ID, not an authentication secret',
             'not_proven':['MTP and adb through the Android gadget on the device','RSA pairing UI','USB suspend behavior',
-                          'Voyage zforce2/FSR input on hardware' if model=='voyage' else 'cyttsp4 on hardware'],
+                          'Voyage cyttsp4 digitizer + PagePress/haptics modules' if model=='voyage' else 'cyttsp4 on hardware'],
             'files':[{'path':str(p.relative_to(stage)),'bytes':p.stat().st_size,'sha256':sha(p.read_bytes())} for p in sorted(stage.rglob('*')) if p.is_file()]}
         (stage/'component-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
         stage.rename(output)

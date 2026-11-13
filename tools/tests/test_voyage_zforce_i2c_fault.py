@@ -38,7 +38,8 @@ class VoyageZforceI2cFault(unittest.TestCase):
         self.assertIn('zforce_i2c_fault_cleared = 1;', text)
         self.assertIn('zforce_i2c_fault_last = 0;', text)
 
-    def test_sysfs_and_bootreport_cover_semantics(self):
+    def test_sysfs_attrs_cover_semantics_bootreport_withdrawn(self):
+        """t167u sysfs stays on the kernel; t172u withdrew BootReport zforce probes."""
         if not DRV.is_file():
             self.skipTest('zforce2.c not on host')
         drv = DRV.read_text(encoding='utf-8', errors='replace')
@@ -48,13 +49,13 @@ class VoyageZforceI2cFault(unittest.TestCase):
         ):
             self.assertIn(f'DEVICE_ATTR({attr}, 0444', drv)
         boot = BOOT.read_text(encoding='utf-8')
+        # Cypress default path: no zforce FORCE_RST / i2c_fault report tags.
         for tag in (
             'zforce_i2c_fault', 'zforce_i2c_fault_first', 'zforce_i2c_fault_count',
             'zforce_i2c_fault_counts', 'zforce_i2c_fault_cleared', 'zforce_i2c_xfer',
-            'header_read', 'bad_frame_start', 'body_read',
         ):
-            self.assertIn(tag, boot)
-        self.assertIn('never-observed', boot)
+            self.assertNotIn(tag, boot)
+        self.assertIn('cyttsp4_mt', boot)
         # Privacy: no FRAME_START byte dump into report.
         self.assertNotIn('0xEE', boot)
         self.assertNotIn('frameHeader', boot)

@@ -167,264 +167,12 @@ std::string ErrStatus(int err) {
     return "error_errno=" + std::to_string(err);
 }
 
-std::string TrimNewline(std::string text) {
-    while (!text.empty() && (text.back() == '\n' || text.back() == '\r')) text.pop_back();
-    return text;
-}
-
-/* Discover platform sysfs attrs under zforce2* (0444 driver shows). */
-std::string FindZforceSysfs(const char* attr) {
-    DIR* directory = opendir("/sys/bus/platform/devices");
-    if (!directory) return {};
-    std::string found;
-    while (auto* entry = readdir(directory)) {
-        const std::string name(entry->d_name);
-        if (name.compare(0, 7, "zforce2") != 0) continue;
-        const std::string path = "/sys/bus/platform/devices/" + name + "/" + attr;
-        if (access(path.c_str(), F_OK) != 0) continue;
-        found = path;
-        break;
-    }
-    closedir(directory);
-    return found;
-}
-
-/* Read a decimal u32 sysfs attr; tag is the report field prefix (no raw paths). */
-void ReportZforceU32Attr(const char* tag, const char* attr) {
-    const std::string found = FindZforceSysfs(attr);
-    if (found.empty()) {
-        Report(std::string(tag) + " status=absent");
-        return;
-    }
-    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0) {
-        Report(std::string(tag) + " status=" + ErrStatus(errno));
-        return;
-    }
-    char buffer[32];
-    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
-    const int read_err = n < 0 ? errno : 0;
-    close(fd);
-    if (n < 0) {
-        Report(std::string(tag) + " status=" + ErrStatus(read_err));
-        return;
-    }
-    if (n == 0) {
-        Report(std::string(tag) + " status=empty");
-        return;
-    }
-    buffer[n] = 0;
-    std::string value = TrimNewline(buffer);
-    for (char c : value) {
-        if (c < '0' || c > '9') {
-            Report(std::string(tag) + " status=unparseable");
-            return;
-        }
-    }
-    /* status=ok value=0 is a real zero; not the same as absent. */
-    Report(std::string(tag) + " status=ok value=" + value);
-}
-
-/* H1: Lab126 `connected` = driver full-init success latch (isConnected), NOT the
- * MCU BootComplete bit. value=0 means initialize()/IRQ never latched success. */
-void ZforceConnected() { ReportZforceU32Attr("zforce_connected", "connected"); }
-
-/* Lab126 ZFStatus (zforceint2.h) — full enum, not 0..4:
- * 0 ZF_OK  1 ZF_ERROR  2 ZF_TIMEOUT  3 ZF_IO_ERROR  4 ZF_NO_RESPONSE
- * 5 ZF_FORCE_EXIT  6 ZF_ERR_FORCE_RST  7 ZF_CONTINUE
- * Device run 20261113T111135: stage=1 status=6 → stuck in getBootComplete;
- * 6 is ZF_ERR_FORCE_RST from processData I2C frame path (not MCU BootComplete
- * bit fail, which would be ZF_ERROR after a parsed TYPE_BOOT_COMPLETE_RES). */
-const char* ZfStatusName(unsigned v) {
-    switch (v) {
-    case 0: return "ZF_OK";
-    case 1: return "ZF_ERROR";
-    case 2: return "ZF_TIMEOUT";
-    case 3: return "ZF_IO_ERROR";
-    case 4: return "ZF_NO_RESPONSE";
-    case 5: return "ZF_FORCE_EXIT";
-    case 6: return "ZF_ERR_FORCE_RST";
-    case 7: return "ZF_CONTINUE";
-    default: return "unknown";
-    }
-}
-
-void ReportZforceStatusAttr(const char* tag, const char* attr) {
-    const std::string found = FindZforceSysfs(attr);
-    if (found.empty()) {
-        Report(std::string(tag) + " status=absent");
-        return;
-    }
-    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0) {
-        Report(std::string(tag) + " status=" + ErrStatus(errno));
-        return;
-    }
-    char buffer[32];
-    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
-    const int read_err = n < 0 ? errno : 0;
-    close(fd);
-    if (n < 0) {
-        Report(std::string(tag) + " status=" + ErrStatus(read_err));
-        return;
-    }
-    if (n == 0) {
-        Report(std::string(tag) + " status=empty");
-        return;
-    }
-    buffer[n] = 0;
-    std::string value = TrimNewline(buffer);
-    for (char c : value) {
-        if (c < '0' || c > '9') {
-            Report(std::string(tag) + " status=unparseable");
-            return;
-        }
-    }
-    unsigned v = 0;
-    for (char c : value) v = v * 10u + unsigned(c - '0');
-    Report(std::string(tag) + " status=ok value=" + value + " name=" + ZfStatusName(v));
-}
-
-/* Read a small sysfs text line (digits/spaces/=/- only); tag prefix only. */
-void ReportZforceTextAttr(const char* tag, const char* attr, size_t max_keep) {
-    const std::string found = FindZforceSysfs(attr);
-    if (found.empty()) {
-        Report(std::string(tag) + " status=absent");
-        return;
-    }
-    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0) {
-        Report(std::string(tag) + " status=" + ErrStatus(errno));
-        return;
-    }
-    char buffer[96];
-    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
-    const int read_err = n < 0 ? errno : 0;
-    close(fd);
-    if (n < 0) {
-        Report(std::string(tag) + " status=" + ErrStatus(read_err));
-        return;
-    }
-    if (n == 0) {
-        Report(std::string(tag) + " status=empty");
-        return;
-    }
-    buffer[n] = 0;
-    std::string value = TrimNewline(buffer);
-    if (value.size() > max_keep) value.resize(max_keep);
-    for (char c : value) {
-        if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') ||
-              c == '=' || c == ' ' || c == '-' || c == '_')) {
-            Report(std::string(tag) + " status=unparseable");
-            return;
-        }
-    }
-    Report(std::string(tag) + " status=ok value=" + value);
-}
-
-const char* I2cFaultName(unsigned v) {
-    switch (v) {
-    case 0: return "none";
-    case 1: return "header_read";
-    case 2: return "bad_frame_start";
-    case 3: return "body_read";
-    default: return "unknown";
-    }
-}
-
-void ReportZforceI2cFaultU32(const char* tag, const char* attr) {
-    const std::string found = FindZforceSysfs(attr);
-    if (found.empty()) {
-        Report(std::string(tag) + " status=absent");
-        return;
-    }
-    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0) {
-        Report(std::string(tag) + " status=" + ErrStatus(errno));
-        return;
-    }
-    char buffer[32];
-    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
-    const int read_err = n < 0 ? errno : 0;
-    close(fd);
-    if (n < 0) {
-        Report(std::string(tag) + " status=" + ErrStatus(read_err));
-        return;
-    }
-    if (n == 0) {
-        Report(std::string(tag) + " status=empty");
-        return;
-    }
-    buffer[n] = 0;
-    std::string value = TrimNewline(buffer);
-    for (char c : value) {
-        if (c < '0' || c > '9') {
-            Report(std::string(tag) + " status=unparseable");
-            return;
-        }
-    }
-    unsigned v = 0;
-    for (char c : value) v = v * 10u + unsigned(c - '0');
-    /* value=0 is real none/cleared-last; absent means sysfs missing. */
-    Report(std::string(tag) + " status=ok value=" + value + " name=" + I2cFaultName(v));
-}
-
-/* t163u/t166u/t167u: stage/status + i2c_fault last/first/count/cleared/xfer.
- * Never raw I2C payload. Semantics: never-observed first=0 count=0 cleared=0;
- * multi-retry accumulates count/n1..n3; success after faults → cleared=1 last=0. */
-void ZforceInitProbe() {
-    ReportZforceU32Attr("zforce_init_stage", "init_stage");
-    ReportZforceStatusAttr("zforce_init_status", "init_status");
-    ReportZforceI2cFaultU32("zforce_i2c_fault", "init_i2c_fault");
-    ReportZforceI2cFaultU32("zforce_i2c_fault_first", "init_i2c_fault_first");
-    ReportZforceU32Attr("zforce_i2c_fault_count", "init_i2c_fault_count");
-    ReportZforceTextAttr("zforce_i2c_fault_counts", "init_i2c_fault_counts", 48);
-    ReportZforceU32Attr("zforce_i2c_fault_cleared", "init_i2c_fault_cleared");
-    ReportZforceTextAttr("zforce_i2c_xfer", "init_i2c_xfer", 48);
-}
-
-/* version sysfs: MCU settings response filled only after stage>=7. Report
- * zero=0|1 only — not firmware identity strings. */
-void ZforceVersionNonzero() {
-    const std::string found = FindZforceSysfs("version");
-    if (found.empty()) {
-        Report("zforce_version status=absent");
-        return;
-    }
-    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
-    if (fd < 0) {
-        Report("zforce_version status=" + ErrStatus(errno));
-        return;
-    }
-    char buffer[64];
-    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
-    const int read_err = n < 0 ? errno : 0;
-    close(fd);
-    if (n < 0) {
-        Report("zforce_version status=" + ErrStatus(read_err));
-        return;
-    }
-    if (n == 0) {
-        Report("zforce_version status=empty");
-        return;
-    }
-    buffer[n] = 0;
-    /* Default show is "0.0b0r0\n" until sendMcuSettingsRequest succeeds. */
-    unsigned major = 0, minor = 0, build = 0, revision = 0;
-    if (sscanf(buffer, "%u.%ub%ur%u", &major, &minor, &build, &revision) != 4) {
-        Report("zforce_version status=unparseable");
-        return;
-    }
-    const int nonzero = (major | minor | build | revision) != 0;
-    Report(std::string("zforce_version status=ok zero=") + (nonzero ? "0" : "1"));
-}
-
-/* H3 static: idc *file* class only (not a live InputReader probe). */
-void ZforceIdcClass() {
-    const char* path = "/system/usr/idc/zforce2.idc";
+/* Static: idc *file* class only (not a live InputReader probe). */
+void CyttspIdcClass() {
+    const char* path = "/system/usr/idc/cyttsp4_mt.idc";
     const int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
-        Report("zforce_idc status=" + ErrStatus(errno));
+        Report("cyttsp_idc status=" + ErrStatus(errno));
         return;
     }
     char buffer[512];
@@ -432,18 +180,18 @@ void ZforceIdcClass() {
     const int read_err = n < 0 ? errno : 0;
     close(fd);
     if (n < 0) {
-        Report("zforce_idc status=" + ErrStatus(read_err));
+        Report("cyttsp_idc status=" + ErrStatus(read_err));
         return;
     }
     if (n == 0) {
-        Report("zforce_idc status=empty");
+        Report("cyttsp_idc status=empty");
         return;
     }
     buffer[n] = 0;
     const char* key = "touch.deviceType";
     const char* at = strstr(buffer, key);
     if (!at) {
-        Report("zforce_idc status=ok class=unspecified");
+        Report("cyttsp_idc status=ok class=unspecified");
         return;
     }
     at += strlen(key);
@@ -451,8 +199,8 @@ void ZforceIdcClass() {
     std::string cls;
     while (*at && *at != '\n' && *at != '\r' && cls.size() < 32) cls.push_back(*at++);
     /* File contents only — not proof InputReader applied the class at runtime. */
-    if (cls.empty()) Report("zforce_idc status=ok source=file class=empty");
-    else Report("zforce_idc status=ok source=file class=" + Clean(cls, 32));
+    if (cls.empty()) Report("cyttsp_idc status=ok source=file class=empty");
+    else Report("cyttsp_idc status=ok source=file class=" + Clean(cls, 32));
 }
 
 std::string FindTouchEventNode() {
@@ -464,7 +212,7 @@ std::string FindTouchEventNode() {
         if (name.compare(0, 5, "event") || name.size() < 6 ||
             name.find_first_not_of("0123456789", 5) != std::string::npos) continue;
         const auto label = Read("/sys/class/input/" + name + "/device/name");
-        if (label == "zforce2\n" || label == "cyttsp4_mt\n") {
+        if (label == "cyttsp4_mt\n") {
             event = name;
             break;
         }
@@ -473,16 +221,16 @@ std::string FindTouchEventNode() {
     return event;
 }
 
-/* H3: ABS ranges via EVIOCGABS — min/max only, never a sample coordinate. */
-void ZforceAbsRanges(const std::string& event) {
+/* ABS ranges via EVIOCGABS — min/max only, never a sample coordinate. */
+void TouchAbsRanges(const std::string& event) {
     if (event.empty()) {
-        Report("zforce_abs status=absent");
+        Report("touch_abs status=absent");
         return;
     }
     const std::string path = "/dev/input/" + event;
     const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC | O_NONBLOCK);
     if (fd < 0) {
-        Report("zforce_abs status=" + ErrStatus(errno));
+        Report("touch_abs status=" + ErrStatus(errno));
         return;
     }
     input_absinfo absx{}, absy{};
@@ -492,15 +240,15 @@ void ZforceAbsRanges(const std::string& event) {
     const int ey = ry < 0 ? errno : 0;
     close(fd);
     if (rx < 0 || ry < 0) {
-        Report("zforce_abs status=" + ErrStatus(rx < 0 ? ex : ey));
+        Report("touch_abs status=" + ErrStatus(rx < 0 ? ex : ey));
         return;
     }
-    Report("zforce_abs status=ok x=" + std::to_string(absx.minimum) + ".." +
+    Report("touch_abs status=ok x=" + std::to_string(absx.minimum) + ".." +
            std::to_string(absx.maximum) + " y=" + std::to_string(absy.minimum) + ".." +
            std::to_string(absy.maximum));
 }
 
-bool ReadZforceIrqCount(unsigned long* value, std::string* status) {
+bool ReadTouchIrqCount(unsigned long* value, std::string* status) {
     const int fd = open("/proc/interrupts", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
     if (fd < 0) {
         *status = ErrStatus(errno);
@@ -519,12 +267,12 @@ bool ReadZforceIrqCount(unsigned long* value, std::string* status) {
         return false;
     }
     buffer[n] = 0;
-    /* request_threaded_irq(..., "ZForce2", ...) — match that name only. */
+    /* cyttsp4 request_threaded_irq(..., dev_name(dev), ...) — match "cyttsp". */
     const char* line = buffer;
     while (line && *line) {
         const char* end = strchr(line, '\n');
         const size_t len = end ? size_t(end - line) : strlen(line);
-        if (len > 8 && memmem(line, len, "ZForce2", 7)) {
+        if (len > 8 && memmem(line, len, "cyttsp", 6)) {
             /* " 64:       1234  ..." — CPU0 count is the first integer after ':'. */
             const char* colon = static_cast<const char*>(memchr(line, ':', len));
             if (!colon) {
@@ -552,7 +300,7 @@ void TouchObserve(const std::string& event) {
     ++g_touch_observe_rounds;
     std::string irq_status;
     unsigned long irq_before = 0, irq_after = 0;
-    const bool irq0 = ReadZforceIrqCount(&irq_before, &irq_status);
+    const bool irq0 = ReadTouchIrqCount(&irq_before, &irq_status);
 
     unsigned syn = 0, abs = 0, key = 0, other = 0;
     std::string ev_status = "skipped";
@@ -612,19 +360,19 @@ void TouchObserve(const std::string& event) {
     if (fd >= 0) close(fd);
 
     std::string irq_after_status;
-    const bool irq1 = ReadZforceIrqCount(&irq_after, &irq_after_status);
+    const bool irq1 = ReadTouchIrqCount(&irq_after, &irq_after_status);
     unsigned irq_delta = 0;
     if (deadline_hit) {
         Report("touch_observe status=timeout window_ms=" + std::to_string(kTouchObserveMs));
     }
     if (!irq0) {
-        Report("zforce_irq status=" + irq_status + " delta=na");
+        Report("touch_irq status=" + irq_status + " delta=na");
     } else if (!irq1) {
-        Report("zforce_irq status=" + irq_after_status + " delta=na");
+        Report("touch_irq status=" + irq_after_status + " delta=na");
     } else {
         irq_delta = irq_after >= irq_before ? unsigned(irq_after - irq_before) : 0;
         g_touch_irq_delta_total += irq_delta;
-        Report("zforce_irq status=ok delta=" + std::to_string(irq_delta) +
+        Report("touch_irq status=ok delta=" + std::to_string(irq_delta) +
                " total_delta=" + std::to_string(g_touch_irq_delta_total));
     }
 
@@ -656,20 +404,17 @@ void Inputs() {
             if (++checked > 32) break;
             const auto label = Read("/sys/class/input/" + name + "/device/name");
             power |= label == "max77696-onkey\n";
-            /* Same digitizer names as InitCheck.cpp CheckInterfaces(). */
-            touch |= label == "cyttsp4_mt\n" || label == "zforce2\n";
+            /* Same digitizer name as InitCheck.cpp CheckInterfaces(). */
+            touch |= label == "cyttsp4_mt\n";
         }
         closedir(directory);
     }
     Report("input_nodes power=" + std::to_string(power) + " touch=" + std::to_string(touch));
-    /* H1/H2/H3 — name presence above is not event-ready.
-     * t163u: init_stage/status + version zero-bit split initialize() failure. */
-    ZforceConnected();
-    ZforceInitProbe();
-    ZforceVersionNonzero();
-    ZforceIdcClass();
+    /* Presence above is not event-ready / InputReader class proof.
+     * t172u: Cypress digitizer — no zforce connected/init_stage probes. */
+    CyttspIdcClass();
     const std::string event = FindTouchEventNode();
-    ZforceAbsRanges(event);
+    TouchAbsRanges(event);
     TouchObserve(event);
 }
 void Framebuffer() {

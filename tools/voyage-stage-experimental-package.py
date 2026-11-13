@@ -210,26 +210,26 @@ def module_match(system_modules: Path, kernel_tar: Path) -> dict:
     mismatched = {n: {'system': sys[n], 'kernel_tar': tar_map.get(n)}
                   for n in sys if tar_map.get(n) != sys[n]}
     only_kernel = sorted(set(tar_map) - set(sys))
-    touch_in_system = [n for n in ('zforce2.ko', 'fsr_keypad.ko', 'drv26xx_haptics.ko') if n in sys]
-    cyttsp_in_system = [n for n in sys if n.startswith('cyttsp')]
-    if touch_in_system and not cyttsp_in_system:
+    pagepress = [n for n in ('fsr_keypad.ko', 'drv26xx_haptics.ko') if n in sys]
+    cyttsp_in_system = [n for n in (
+        'cyttsp4_core.ko', 'cyttsp4_i2c.ko', 'cyttsp4_mt_b.ko') if n in sys]
+    zforce_in_system = [n for n in sys if n.startswith('zforce')]
+    if cyttsp_in_system and not zforce_in_system:
         note = (
-            'Voyage icewine touch set present in system image (%s) and matched '
-            'to kernel tar by sha256. cyttsp4 remains only in the shared kernel '
-            'tar (PW3-shaped) and is not installed into system. Runtime touch '
-            'path on Voyage is still unverified.'
-            % ', '.join(touch_in_system)
+            'Voyage Cypress digitizer modules present in system (%s); PagePress/'
+            'haptics (%s). zforce2 must not ship. Runtime touch still unverified '
+            'until stock/device evidence.'
+            % (', '.join(cyttsp_in_system), ', '.join(pagepress) or 'none')
         )
-    elif not touch_in_system:
+    elif zforce_in_system:
         note = (
-            'Voyage touch candidates such as zforce2.ko may be in the kernel tar '
-            'but absent from the staged system image; cyttsp4 is PW3-shaped. '
-            'Runtime touch path on Voyage is unverified.'
+            'REFUSE shape: zforce modules in system image (%s) — wrong digitizer.'
+            % ', '.join(zforce_in_system)
         )
     else:
         note = (
-            'Unexpected mix of Voyage touch modules and cyttsp in system: %s'
-            % sorted(sys)
+            'Voyage Cypress modules absent from staged system image; only kernel '
+            'tar may hold them. Runtime touch path unverified.'
         )
     return {
         'system_module_count': len(sys),
@@ -237,8 +237,9 @@ def module_match(system_modules: Path, kernel_tar: Path) -> dict:
         'matched_by_sha256': sorted(matched),
         'mismatched': mismatched,
         'in_kernel_tar_not_in_system_image': only_kernel,
-        'voyage_touch_modules_in_system': touch_in_system,
+        'voyage_touch_modules_in_system': cyttsp_in_system + pagepress,
         'cyttsp_modules_in_system': cyttsp_in_system,
+        'zforce_modules_in_system': zforce_in_system,
         'note': note,
     }
 

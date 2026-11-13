@@ -82,14 +82,15 @@ def main():
     modules_dir = product / 'system/vendor/lib/modules'
     kos = sorted(modules_dir.glob('*.ko')) if modules_dir.is_dir() else []
     ko_names = [p.name for p in kos]
-    for required in ('zforce2.ko', 'fsr_keypad.ko', 'drv26xx_haptics.ko',
+    for required in ('cyttsp4_core.ko', 'cyttsp4_i2c.ko', 'cyttsp4_mt_b.ko',
+                     'fsr_keypad.ko', 'drv26xx_haptics.ko',
                      'ath6kl_sdio.ko', 'cfg80211.ko', 'mxc_epdc_fb.ko'):
         if required not in ko_names:
             raise SystemExit('voyage export missing expected module %s (have %s)'
                              % (required, ko_names))
-    if any(n.startswith('cyttsp') for n in ko_names):
-        raise SystemExit('voyage export must not ship cyttsp (PW3 touch) modules: %s'
-                         % [n for n in ko_names if n.startswith('cyttsp')])
+    if 'zforce2.ko' in ko_names:
+        raise SystemExit('voyage export must not ship zforce2.ko (Cypress digitizer): %s'
+                         % ko_names)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.voyage-exp-export-',
@@ -160,7 +161,8 @@ def main():
             'product': 'voyage',
             'system_modules': ko_names,
             'voyage_touch_modules_present': [
-                n for n in ('zforce2.ko', 'fsr_keypad.ko', 'drv26xx_haptics.ko')
+                n for n in ('cyttsp4_core.ko', 'cyttsp4_i2c.ko', 'cyttsp4_mt_b.ko',
+                            'fsr_keypad.ko', 'drv26xx_haptics.ko')
                 if n in ko_names
             ],
         }

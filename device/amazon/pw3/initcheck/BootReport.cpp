@@ -229,11 +229,67 @@ void ReportZforceU32Attr(const char* tag, const char* attr) {
  * MCU BootComplete bit. value=0 means initialize()/IRQ never latched success. */
 void ZforceConnected() { ReportZforceU32Attr("zforce_connected", "connected"); }
 
-/* t163u: init_stage / init_status — which initialize() step stopped + ZFStatus.
- * stage 0..9 codes are fixed in the driver; never raw I2C. */
+/* Lab126 ZFStatus (zforceint2.h) — full enum, not 0..4:
+ * 0 ZF_OK  1 ZF_ERROR  2 ZF_TIMEOUT  3 ZF_IO_ERROR  4 ZF_NO_RESPONSE
+ * 5 ZF_FORCE_EXIT  6 ZF_ERR_FORCE_RST  7 ZF_CONTINUE
+ * Device run 20261113T111135: stage=1 status=6 → stuck in getBootComplete;
+ * 6 is ZF_ERR_FORCE_RST from processData I2C frame path (not MCU BootComplete
+ * bit fail, which would be ZF_ERROR after a parsed TYPE_BOOT_COMPLETE_RES). */
+const char* ZfStatusName(unsigned v) {
+    switch (v) {
+    case 0: return "ZF_OK";
+    case 1: return "ZF_ERROR";
+    case 2: return "ZF_TIMEOUT";
+    case 3: return "ZF_IO_ERROR";
+    case 4: return "ZF_NO_RESPONSE";
+    case 5: return "ZF_FORCE_EXIT";
+    case 6: return "ZF_ERR_FORCE_RST";
+    case 7: return "ZF_CONTINUE";
+    default: return "unknown";
+    }
+}
+
+void ReportZforceStatusAttr(const char* tag, const char* attr) {
+    const std::string found = FindZforceSysfs(attr);
+    if (found.empty()) {
+        Report(std::string(tag) + " status=absent");
+        return;
+    }
+    const int fd = open(found.c_str(), O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        Report(std::string(tag) + " status=" + ErrStatus(errno));
+        return;
+    }
+    char buffer[32];
+    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
+    const int read_err = n < 0 ? errno : 0;
+    close(fd);
+    if (n < 0) {
+        Report(std::string(tag) + " status=" + ErrStatus(read_err));
+        return;
+    }
+    if (n == 0) {
+        Report(std::string(tag) + " status=empty");
+        return;
+    }
+    buffer[n] = 0;
+    std::string value = TrimNewline(buffer);
+    for (char c : value) {
+        if (c < '0' || c > '9') {
+            Report(std::string(tag) + " status=unparseable");
+            return;
+        }
+    }
+    unsigned v = 0;
+    for (char c : value) v = v * 10u + unsigned(c - '0');
+    Report(std::string(tag) + " status=ok value=" + value + " name=" + ZfStatusName(v));
+}
+
+/* t163u/t166u: init_stage / init_status — which initialize() step stopped +
+ * ZFStatus (with name=). Never raw I2C. */
 void ZforceInitProbe() {
     ReportZforceU32Attr("zforce_init_stage", "init_stage");
-    ReportZforceU32Attr("zforce_init_status", "init_status");
+    ReportZforceStatusAttr("zforce_init_status", "init_status");
 }
 
 /* version sysfs: MCU settings response filled only after stage>=7. Report

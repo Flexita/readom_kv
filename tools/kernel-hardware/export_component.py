@@ -38,6 +38,7 @@ PW3_TOUCH_MODULES={
 VOYAGE_TOUCH_MODULES={
  'drv26xx_haptics':'kernel/drivers/input/keyboard/drv26xx_haptics.ko',
  'fsr_keypad':'kernel/drivers/input/keyboard/fsr_keypad.ko',
+ 'als_max44009':'kernel/drivers/input/misc/als_max44009.ko',
  'cyttsp4_core':'kernel/drivers/input/touchscreen/cyttsp4_core.ko',
  'cyttsp4_i2c':'kernel/drivers/input/touchscreen/cyttsp4_i2c.ko',
  'cyttsp4_mt_b':'kernel/drivers/input/touchscreen/cyttsp4_mt_b.ko',
@@ -65,6 +66,7 @@ PW3_TOUCH_CONFIG={
 VOYAGE_TOUCH_CONFIG={
  **PW3_TOUCH_CONFIG,
  'CONFIG_KEYBOARD_FSR':'m',
+ 'CONFIG_INPUT_ALS_MAX44009':'m',
 }
 CONFIG={**SHARED_CONFIG, **PW3_TOUCH_CONFIG}
 RELOCS={2:'R_ARM_ABS32',28:'R_ARM_CALL',43:'R_ARM_MOVW_ABS_NC',44:'R_ARM_MOVT_ABS'}
@@ -87,7 +89,7 @@ def model_hardware_rc(model):
 def model_boot_order(model):
     if model=='pw3':
         return [['cyttsp4_core','cyttsp4_i2c','cyttsp4_mt_b','cfg80211'],['mxc_epdc_fb']]
-    return [['drv26xx_haptics','fsr_keypad','cyttsp4_core','cyttsp4_i2c','cyttsp4_mt_b','cfg80211'],
+    return [['drv26xx_haptics','fsr_keypad','als_max44009','cyttsp4_core','cyttsp4_i2c','cyttsp4_mt_b','cfg80211'],
             ['mxc_epdc_fb']]
 
 def elf(data):
@@ -257,7 +259,7 @@ PRODUCT_COPY_FILES += \\
             'usb_default':'every boot: MTP; adb only when Android turns it on (developer options), with authentication',
             'serial':'16 bytes from urandom once per device, hex encoded, kept in persist.pw3.usb.serial; no factory ID, not an authentication secret',
             'not_proven':['MTP and adb through the Android gadget on the device','RSA pairing UI','USB suspend behavior',
-                          'Voyage cyttsp4 digitizer + PagePress/haptics modules' if model=='voyage' else 'cyttsp4 on hardware'],
+                          'Voyage cyttsp4 + PagePress/haptics + ALS modules' if model=='voyage' else 'cyttsp4 on hardware'],
             'files':[{'path':str(p.relative_to(stage)),'bytes':p.stat().st_size,'sha256':sha(p.read_bytes())} for p in sorted(stage.rglob('*')) if p.is_file()]}
         (stage/'component-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
         stage.rename(output)

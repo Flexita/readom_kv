@@ -407,8 +407,11 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/rootdir/pw3-storage-floor.sh:system/bin/pw3-storage-floor.sh \
     frameworks/native/data/etc/android.hardware.touchscreen.xml:system/etc/permissions/android.hardware.touchscreen.xml \
     $(LOCAL_PATH)/input/max77696-onkey.kl:system/usr/keylayout/max77696-onkey.kl \
-    $(LOCAL_PATH)/input/cyttsp4_mt.idc:system/usr/idc/cyttsp4_mt.idc \
-    $(LOCAL_PATH)/input/zforce2.idc:system/usr/idc/zforce2.idc
+    $(LOCAL_PATH)/input/cyttsp4_mt.idc:system/usr/idc/cyttsp4_mt.idc
+# Do not ship zforce2.idc: Voyage digitizer is cyttsp4_mt (user-confirmed). An
+# IDC without zforce2.ko is leftover noise from the withdrawn zforce path.
+
+# PagePress / ALS helpers live under input/ and sensors/; voyage.mk adds packages.
 
 # First validation image uses bounded RAM data and read-only eMMC.
 $(call inherit-product, $(LOCAL_PATH)/initialization.mk)

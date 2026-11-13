@@ -35,6 +35,12 @@
         <transport>hwbinder</transport><version>1.0</version>
         <interface><name>IPower</name><instance>default</instance></interface>
     </hal>
+    <!-- Voyage ALS (MAX44009); sensors.pw3 returns 0 sensors when /dev/als absent. -->
+    <hal format="hidl">
+        <name>android.hardware.sensors</name>
+        <transport>hwbinder</transport><version>1.0</version>
+        <interface><name>ISensors</name><instance>default</instance></interface>
+    </hal>
     <hal format="hidl">
         <name>android.hardware.health</name>
         <transport>hwbinder</transport><version>1.0</version>

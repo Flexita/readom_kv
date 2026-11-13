@@ -1,0 +1,7 @@
+# Voyage PagePress EVENT_ENABLE oneshot (input/FsrEnable.c).
+type pw3_fsr_enable, domain;
+type pw3_fsr_enable_exec, exec_type, file_type;
+init_daemon_domain(pw3_fsr_enable)
+
+# /dev/keypad is a misc node; label as input_device via file_contexts.
+allow pw3_fsr_enable input_device:chr_file rw_file_perms;

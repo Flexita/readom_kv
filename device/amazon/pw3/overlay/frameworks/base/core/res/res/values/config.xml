@@ -25,7 +25,9 @@
     <bool name="config_lidControlsSleep">true</bool>
     <!-- PW3 has no physical Home, Back, or Recents keys. -->
     <bool name="config_showNavigationBar">true</bool>
-    <bool name="config_automatic_brightness_available">false</bool>
+    <!-- Leave config_automatic_brightness_available to AOSP default (false).
+         Voyage enables it via device/amazon/voyage/overlay; do not force false
+         here — aapt2 applies the pw3 overlay after voyage and would win. -->
     <!-- The frontlight has the Kindle's 26 steps (lights/lights.c): 1..255 is
          spread evenly over them, 0 is off. AOSP's lowest setting of 10 would
          cut off the faintest step; 225 is step 22, the Kindle's own default. -->

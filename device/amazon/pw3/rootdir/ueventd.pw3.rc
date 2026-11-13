@@ -7,4 +7,8 @@
 /sys/class/backlight/max77696-bl brightness 0660 system system
 /sys/class/backlight/max77696-bl bl_power 0660 system system
 
+# Voyage PagePress / ALS misc nodes (absent on PW3 until modules load).
+/dev/keypad 0660 system system
+/dev/als 0660 system system
+
 # No raw block-device permission grants and no touch-firmware loader node.

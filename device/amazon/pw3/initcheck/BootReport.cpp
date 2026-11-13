@@ -7,6 +7,7 @@
 #include <linux/fb.h>
 #include <linux/input.h>
 #include <sys/ioctl.h>
+#include <linux/ioctl.h>
 #include <sys/stat.h>
 #include <poll.h>
 #include <time.h>
@@ -393,9 +394,35 @@ void TouchObserve(const std::string& event) {
            " rounds=" + std::to_string(g_touch_observe_rounds));
 }
 
+/* Voyage ALS: integer lux via ALS_IOCTL_GET_LUX only — not auto-brightness proof. */
+void AlsLuxSample() {
+#ifndef ALS_MAGIC_NUMBER
+#define ALS_MAGIC_NUMBER 'A'
+#endif
+#ifndef ALS_IOCTL_GET_LUX
+#define ALS_IOCTL_GET_LUX _IOR(ALS_MAGIC_NUMBER, 0x01, int)
+#endif
+    const int fd = open("/dev/als", O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) {
+        Report("als_lux status=" + ErrStatus(errno));
+        return;
+    }
+    int lux = -1;
+    int rc;
+    do { rc = ioctl(fd, ALS_IOCTL_GET_LUX, &lux); } while (rc < 0 && errno == EINTR);
+    const int err = rc < 0 ? errno : 0;
+    close(fd);
+    if (rc < 0) {
+        Report("als_lux status=" + ErrStatus(err));
+        return;
+    }
+    if (lux < 0) lux = 0;
+    Report("als_lux status=ok lux=" + std::to_string(lux));
+}
+
 void Inputs() {
     DIR* directory = opendir("/sys/class/input");
-    bool power = false, touch = false; unsigned checked = 0;
+    bool power = false, touch = false, pagepress = false; unsigned checked = 0;
     if (directory) {
         while (auto* entry = readdir(directory)) {
             const std::string name(entry->d_name);
@@ -406,16 +433,20 @@ void Inputs() {
             power |= label == "max77696-onkey\n";
             /* Same digitizer name as InitCheck.cpp CheckInterfaces(). */
             touch |= label == "cyttsp4_mt\n";
+            pagepress |= label == "fsr_keypad\n";
         }
         closedir(directory);
     }
-    Report("input_nodes power=" + std::to_string(power) + " touch=" + std::to_string(touch));
+    Report("input_nodes power=" + std::to_string(power) + " touch=" + std::to_string(touch) +
+           " pagepress=" + std::to_string(pagepress));
     /* Presence above is not event-ready / InputReader class proof.
-     * t172u: Cypress digitizer — no zforce connected/init_stage probes. */
+     * t172u: Cypress digitizer — no zforce connected/init_stage probes.
+     * t174u: PagePress/ALS presence only; not a claim keys or auto-brightness work. */
     CyttspIdcClass();
     const std::string event = FindTouchEventNode();
     TouchAbsRanges(event);
     TouchObserve(event);
+    AlsLuxSample();
 }
 void Framebuffer() {
     const int fd = open("/dev/graphics/fb0", O_RDONLY | O_CLOEXEC);

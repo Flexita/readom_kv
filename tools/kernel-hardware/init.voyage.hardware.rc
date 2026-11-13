@@ -1,9 +1,10 @@
-# Voyage (icewine_wario) public modules — t172u Cypress correction.
+# Voyage (icewine_wario) public modules — t172u Cypress + t174u PagePress/ALS.
 # Hardware: iFixit Voyage teardown names Cypress CY8CTMA4; GPL board table
 # registers cyttsp4_i2c_adapter @ 0x24 (and a parallel zforce2 @ 0x50 that is
 # NOT the stock input path). Stock icewine logs expose input name "cyttsp4_mt".
-# Load Cypress TTSP4 only for touch. Keep PagePress (fsr_keypad) + DRV26xx
-# haptics as separate modules — not touch evidence. Do not load zforce2.
+# PagePress: fsr_keypad @ 0x58 (events via /dev/keypad EVENT_ENABLE).
+# Haptic: drv26xx @ 0x59 — stock FSR coupling only; no calib/freq writes.
+# ALS: als_max44009 @ 0x4A → /dev/als for sensors HAL (real lux).
 # CONFIG_LAB126_ANDROID_DISABLE_TOUCH_FW_UPDATE rejects the cyttsp loader.
 # Not a device boot proof. Per-device firmware under /firmware/image stays
 # root-only DAC; this RC does not flash firmware.
@@ -11,6 +12,7 @@
 on post-fs-data
     insmod /vendor/lib/modules/drv26xx_haptics.ko
     insmod /vendor/lib/modules/fsr_keypad.ko
+    insmod /vendor/lib/modules/als_max44009.ko
     insmod /vendor/lib/modules/cyttsp4_core.ko recovery_mode=0
     insmod /vendor/lib/modules/cyttsp4_i2c.ko
     insmod /vendor/lib/modules/cyttsp4_mt_b.ko
@@ -19,6 +21,8 @@ on post-fs-data
     chmod 0660 /sys/class/backlight/max77696-bl/brightness
     chown system system /sys/class/backlight/max77696-bl/bl_power
     chmod 0660 /sys/class/backlight/max77696-bl/bl_power
+    # PagePress defaults event_enable=false; enable keys without calib writes.
+    start pw3-fsr-enable
 
 # The Wi-Fi stack must request these states; no automatic radio-on at boot.
 on property:vendor.pw3.wifi.modules=load

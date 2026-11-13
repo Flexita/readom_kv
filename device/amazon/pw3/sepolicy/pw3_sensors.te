@@ -1,0 +1,2 @@
+# Voyage ALS (/dev/als) for HIDL sensors HAL → TYPE_LIGHT.
+allow hal_sensors_default sensors_device:chr_file rw_file_perms;

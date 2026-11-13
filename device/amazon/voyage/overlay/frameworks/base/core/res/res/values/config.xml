@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Voyage-only: enable automatic brightness when ALS TYPE_LIGHT is present.
+    Curves are for the max77696 frontlight via lights.pw3 (1..255 → 26 steps).
+    Manual brightness remains available in Settings. Longer darkening debounce
+    reduces e-ink flicker; values are host-chosen starting points, not device-
+    proven optima. Do not treat this as a claim that auto-brightness is fixed.
+-->
+<resources>
+    <bool name="config_automatic_brightness_available">true</bool>
+    <!-- Lux control points (ascending). Backlight array length = levels + 1. -->
+    <integer-array name="config_autoBrightnessLevels">
+        <item>10</item>
+        <item>30</item>
+        <item>80</item>
+        <item>200</item>
+        <item>500</item>
+        <item>1200</item>
+        <item>3000</item>
+    </integer-array>
+    <integer-array name="config_autoBrightnessLcdBacklightValues">
+        <item>8</item>
+        <item>40</item>
+        <item>80</item>
+        <item>120</item>
+        <item>160</item>
+        <item>200</item>
+        <item>230</item>
+        <item>255</item>
+    </integer-array>
+    <!-- Debounce (ms): brighten faster than darken to limit panel thrash. -->
+    <integer name="config_autoBrightnessBrighteningLightDebounce">2000</integer>
+    <integer name="config_autoBrightnessDarkeningLightDebounce">6000</integer>
+    <integer name="config_autoBrightnessLightSensorRate">500</integer>
+    <integer name="config_autoBrightnessAmbientLightHorizon">12000</integer>
+</resources>

@@ -1,0 +1,7 @@
+# Voyage-only trigger is in init.voyage.hardware.rc (start after fsr_keypad).
+service pw3-fsr-enable /system/bin/pw3-fsr-enable
+    class main
+    user root
+    group root system
+    oneshot
+    disabled

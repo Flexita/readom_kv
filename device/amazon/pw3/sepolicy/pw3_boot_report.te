@@ -34,6 +34,8 @@ r_dir_file(pw3_boot_report, system_file)
 # Code never calls EVIOCGRAB; no write. Counts only, never coordinates.
 allow pw3_boot_report input_device:dir r_dir_perms;
 allow pw3_boot_report input_device:chr_file { getattr open read ioctl };
+# Voyage ALS: ALS_IOCTL_GET_LUX integer only (no calib write).
+allow pw3_boot_report sensors_device:chr_file { getattr open read ioctl };
 allow pw3_boot_report graphics_device:dir search;
 allow pw3_boot_report graphics_device:chr_file { getattr open read ioctl };
 allowxperm pw3_boot_report graphics_device:chr_file ioctl { 0x4600 0x4602 0x4680 };

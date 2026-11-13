@@ -3,6 +3,12 @@
 /(vendor|system/vendor)/bin/pw3-fg-state u:object_r:pw3_fg_state_exec:s0
 
 /system/bin/pw3-boot-report u:object_r:pw3_boot_report_exec:s0
+/system/bin/pw3-fsr-enable u:object_r:pw3_fsr_enable_exec:s0
+
+# Voyage PagePress misc control node (EVENT_ENABLE ioctl only from pw3-fsr-enable).
+/dev/keypad u:object_r:input_device:s0
+# Voyage MAX44009 ALS misc node (GET_LUX for sensors HAL / boot-report).
+/dev/als u:object_r:sensors_device:s0
 
 # Per-device calibration/firmware is never an app-readable system file.
 /(vendor|system/vendor)/firmware/(ath6k|epdc)(/.*)? u:object_r:pw3_private_firmware_file:s0

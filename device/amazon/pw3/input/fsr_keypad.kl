@@ -1,0 +1,5 @@
+# Kindle Voyage PagePress (fsr_keypad) — linux KEY_PAGEUP/PAGEDOWN (104/109).
+# Map to VOLUME_* so common readers that listen for volume keys can turn pages.
+# config_useFixedVolume=true keeps AudioService from changing stream volume.
+key 104   VOLUME_UP
+key 109   VOLUME_DOWN
